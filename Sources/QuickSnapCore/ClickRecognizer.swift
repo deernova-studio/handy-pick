@@ -11,6 +11,7 @@ public struct ClickRecognizer {
     public struct Gesture: Equatable {
         public let target: Int32
         public let point: CGPoint
+        public init(target: Int32, point: CGPoint) { self.target = target; self.point = point }
     }
     public let interval: TimeInterval
     public let tolerance: CGFloat

@@ -3,6 +3,54 @@ import CoreGraphics
 @testable import QuickSnapCore
 
 final class QuickSnapCoreTests: XCTestCase {
+    func testShortcutRoundTripPreservesPhysicalKeyAndModifiers() throws {
+        for binding in [ShortcutBinding.mouse(2), .mouse(7), .key(40, 1 << 20), .modifier(54)] {
+            let data = try JSONEncoder().encode(binding)
+            XCTAssertEqual(try JSONDecoder().decode(ShortcutBinding.self, from: data), binding)
+        }
+    }
+    func testRecorderRejectsPrimaryMouseButtonsAndEscape() {
+        for binding in [ShortcutBinding.mouse(0), .mouse(1), .mouse(32), .key(53, 0), .key(55, 0), .modifier(40)] {
+            XCTAssertFalse(binding.isValid)
+        }
+        XCTAssertTrue(ShortcutBinding.key(40, 1 << 20).isValid)
+        XCTAssertTrue(ShortcutBinding.modifier(55).isValid)
+    }
+    func testKeyboardChordRequiresExactModifiersButIgnoresCapsLock() {
+        let command: UInt64 = 1 << 20
+        let binding = ShortcutBinding.key(40, command)
+        XCTAssertTrue(binding.matchesKey(40, flags: command | (1 << 16)))
+        XCTAssertFalse(binding.matchesKey(40, flags: 0))
+        XCTAssertFalse(binding.matchesKey(40, flags: command | (1 << 17)))
+        XCTAssertFalse(binding.matchesKey(41, flags: command))
+    }
+    func testHoldingKeyNeverBecomesDoublePress() {
+        var gate = KeyPressGate()
+        let binding = ShortcutBinding.key(40, 0)
+        XCTAssertEqual(gate.down(binding: binding, code: 40, flags: 0, repeating: false), .press)
+        XCTAssertEqual(gate.down(binding: binding, code: 40, flags: 0, repeating: true), .consume)
+        XCTAssertEqual(gate.down(binding: binding, code: 40, flags: 0, repeating: false), .consume)
+        XCTAssertEqual(gate.up(code: 40), .consume)
+        XCTAssertEqual(gate.down(binding: binding, code: 40, flags: 0, repeating: false), .press)
+    }
+    func testOtherKeysPassAndSwallowedKeyUpIsPaired() {
+        var gate = KeyPressGate()
+        let binding = ShortcutBinding.key(40, 1 << 20)
+        XCTAssertEqual(gate.down(binding: binding, code: 40, flags: 0, repeating: false), .pass)
+        XCTAssertEqual(gate.down(binding: binding, code: 41, flags: 1 << 20, repeating: false), .pass)
+        XCTAssertEqual(gate.down(binding: binding, code: 40, flags: 1 << 20, repeating: false), .press)
+        XCTAssertEqual(gate.up(code: 41), .pass)
+        XCTAssertEqual(gate.up(code: 40), .consume)
+        XCTAssertEqual(gate.up(code: 40), .pass)
+    }
+    func testPauseClearsKeyboardHeldState() {
+        var gate = KeyPressGate()
+        let binding = ShortcutBinding.key(40, 0)
+        _ = gate.down(binding: binding, code: 40, flags: 0, repeating: false)
+        gate.reset()
+        XCTAssertEqual(gate.up(code: 40), .pass)
+        XCTAssertEqual(gate.down(binding: binding, code: 40, flags: 0, repeating: false), .press)
+    }
     func testSingleClickNeverTriggersAnAction() {
         var gesture = ClickRecognizer(interval: 0.3)
         XCTAssertNil(gesture.press(at: 10, point: .zero, target: 42))

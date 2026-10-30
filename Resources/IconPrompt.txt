@@ -1,0 +1,11 @@
+Generated with the built-in image_gen tool (not the CLI fallback).
+
+Final artwork prompt:
+Use case: logo-brand. Design one elegant minimalist black-and-white icon for a macOS screenshot utility named Quick Snap. The idea is SCISSORS CUTTING OUT A PICTURE. A small recognizable photographic card, slightly tilted, with one very simple mountain/horizon stroke inside, and a graceful pair of scissors integrated at its lower-left edge as though trimming out the image. The scissors need two unmistakable small loop handles and two clean crossing blades. Render the idea with just a few fluid, expressive, gently curved, tapering black lines and bold restrained accents. Tasteful, airy, approachable and a little poetic; expressive shorthand, beautifully balanced negative space, more like a refined pictogram than a literal detailed illustration. Keep the two concepts merged into one compact unified silhouette, instantly readable as screenshot / clipping even at small size. Slight asymmetry is welcome. Pure black on pure white square background, centered, ample margins. No stars, no sparkles, no deer, no antlers, no weapon-like sharp frame, no lettering, no extra symbols, no texture, no gradients, no shadows, no mockup, no multiple options. Output a single finished icon artwork.
+
+Menu template extraction prompt:
+Remove the pure white background of this scissors-and-picture app logo and output a genuinely transparent PNG. Preserve the exact black scissors loops and blades, circular pivot hole, tilted picture frame and simple mountain strokes, their geometry, placement, proportions and edge quality. All white spaces and internal holes must become transparent. Do not redraw or simplify the symbol, do not add any element, do not add a shadow, do not recolor. One solid-black logo on a transparent square canvas.
+
+AppIcon.png: final white-background artwork.
+MenuIcon-source.png: generated transparent artwork.
+QuickSnap.icns and MenuIcon.png: resized/packaged by Scripts/build-icons.sh.
