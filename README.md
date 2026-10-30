@@ -4,7 +4,7 @@
 
 ## 使用
 
-1. 打开「应用程序 → Quick Snap」。启动后只显示剪刀与图片图标，没有主窗口或 Dock 图标。
+1. 打开「应用程序 → Quick Snap」。启动后只显示剪刀图标，没有主窗口或 Dock 图标。
 2. 点击菜单栏图标，出现快捷键小面板。需要更换时点当前键位，再按一次中键、侧键或键盘按键，自动保存；修饰键按下后松开即可录入。Esc 取消录入。组合键可一次录入，如 ⌃⌥K。
 3. 输入区外双击绑定按键 → 左键拖动框选 → 松开复制。
 4. 输入区内双击同一按键 → 聚焦该输入区并粘贴最近截图。
@@ -35,7 +35,7 @@ zsh Scripts/build.sh
 
 ## 图标
 
-黑白的剪刀与图片组合，用流畅、简洁的线条表达剪取画面。`Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏图标由 `Sources/QuickSnap/MenuBarIcon.swift` 独立绘制，尺寸为 22 × 16 点：透明外角、圆角小白底、粗黑剪刀和简化图片轮廓。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `Resources/IconPrompt.txt`。运行 `zsh Scripts/build-icons.sh` 可重新生成不同尺寸资源。
+黑白的剪刀与图片组合，用流畅、简洁的线条表达剪取画面。`Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `Sources/QuickSnap/MenuBarIcon.swift` 提供的原生 SF Symbols 剪刀符号，尺寸为 18 × 18 点，背景完全透明，作为 template image 由 macOS 自动按菜单栏前景色显示。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `Resources/IconPrompt.txt`。运行 `zsh Scripts/build-icons.sh` 可重新生成不同尺寸资源。
 
 ## 行为与边界
 

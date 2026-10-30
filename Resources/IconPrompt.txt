@@ -8,5 +8,5 @@ Edit this exact Quick Snap scissors-and-picture icon. Keep the existing composit
 
 AppIcon.png: final white-background, heavier-stroke artwork.
 QuickSnap.icns: resized/packaged app artwork, by Scripts/build-icons.sh.
-The final menu-bar icon is separate code-native vector artwork in Sources/QuickSnap/MenuBarIcon.swift: 22 x 16 points, transparent corners, a small rounded white background, black scissors and an open photo corner. It is not a scaled copy of the generated app artwork.
+The final menu-bar icon is a separate native SF Symbols scissors template in Sources/QuickSnap/MenuBarIcon.swift: 18 x 18 points, fully transparent background, and system-tinted monochrome foreground. It is not a scaled copy of the generated app artwork.
 MenuIcon.png and MenuIcon-preview.png are exported from that shared drawing by Scripts/render-menu-icon.swift.
