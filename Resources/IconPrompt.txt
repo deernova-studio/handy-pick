@@ -8,5 +8,5 @@ Edit this exact Quick Snap scissors-and-picture icon. Keep the existing composit
 
 AppIcon.png: final white-background, heavier-stroke artwork.
 QuickSnap.icns: resized/packaged app artwork, by Scripts/build-icons.sh.
-The final menu-bar icon is a simplified code-native rendition of the same tilted photo and scissors mark in Sources/QuickSnap/MenuBarIcon.swift: 18 points wide x 22 points tall, a white rounded badge with the unstretched brand mark centered vertically, and the brand-mark strokes cut out of its alpha to reveal the menu-bar background. No black glyph is painted, and the image is not template-tinted.
+The final menu-bar icon is a simplified code-native rendition of the same tilted photo and scissors mark in Sources/QuickSnap/MenuBarIcon.swift: 22 points wide x 18 points tall, a white rounded badge with the unstretched brand mark centered horizontally, and the brand-mark strokes cut out of its alpha to reveal the menu-bar background. No black glyph is painted, and the image is not template-tinted.
 MenuIcon.png and MenuIcon-preview.png are exported from that shared drawing by Scripts/render-menu-icon.swift.
