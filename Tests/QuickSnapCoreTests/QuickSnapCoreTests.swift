@@ -3,78 +3,60 @@ import CoreGraphics
 @testable import QuickSnapCore
 
 final class QuickSnapCoreTests: XCTestCase {
-    func testEarlyTimerRetriesInsteadOfLosingSingleClick() {
-        var time = 10.0
-        var deliveries: [() -> Void] = []
-        var fired: [TimeInterval] = []
-        let timer = ClickTimer(now: { time }, enqueue: { _, work in deliveries.append(work) })
-        timer.schedule(deadline: 10.3) { fired.append($0) }
-        time = 10.299999
-        deliveries.removeFirst()()
-        XCTAssertTrue(fired.isEmpty)
-        XCTAssertEqual(deliveries.count, 1)
-        time = 10.31
-        deliveries.removeFirst()()
-        XCTAssertEqual(fired, [10.31])
-    }
-    func testCancelledTimerCannotCaptureAfterDoubleClickOrPause() {
-        var deliveries: [() -> Void] = []
-        var fired = false
-        let timer = ClickTimer(now: { 20 }, enqueue: { _, work in deliveries.append(work) })
-        timer.schedule(deadline: 20) { _ in fired = true }
-        timer.cancel()
-        deliveries.removeFirst()()
-        XCTAssertFalse(fired)
-    }
-    func testNewClickReplacesPreviousTimer() {
-        var time = 10.0
-        var deliveries: [() -> Void] = []
-        var fired: [String] = []
-        let timer = ClickTimer(now: { time }, enqueue: { _, work in deliveries.append(work) })
-        timer.schedule(deadline: 10.3) { _ in fired.append("old") }
-        timer.schedule(deadline: 10.4) { _ in fired.append("new") }
-        time = 10.5
-        deliveries.removeFirst()()
-        deliveries.removeFirst()()
-        XCTAssertEqual(fired, ["new"])
-    }
-    func testSingleWaitsForDoubleClickWindow() {
+    func testSingleClickNeverTriggersAnAction() {
         var gesture = ClickRecognizer(interval: 0.3)
-        XCTAssertEqual(gesture.press(at: 10, point: .zero, target: 42), [.cancelSingle, .scheduleSingle(10.3)])
-        XCTAssertNil(gesture.singleDue(at: 10.2))
-        XCTAssertEqual(gesture.singleDue(at: 10.31), .capture(42))
-        XCTAssertNil(gesture.singleDue(at: 11))
+        XCTAssertNil(gesture.press(at: 10, point: .zero, target: 42))
+        // A click after the interval begins a new pair rather than performing the old single.
+        XCTAssertNil(gesture.press(at: 11, point: .zero, target: 42))
     }
-    func testDoubleClickPastesOnceAndNeverCaptures() {
+    func testDoubleClickReportsExactPointerLocationOnce() {
         var gesture = ClickRecognizer(interval: 0.4)
-        _ = gesture.press(at: 10, point: CGPoint(x: 50, y: 80), target: 42)
-        XCTAssertEqual(gesture.press(at: 10.15, point: CGPoint(x: 52, y: 81), target: 42), [.cancelSingle, .paste(42)])
-        XCTAssertNil(gesture.singleDue(at: 11))
+        XCTAssertNil(gesture.press(at: 10, point: CGPoint(x: 50, y: 80), target: 42))
+        let result = gesture.press(at: 10.15, point: CGPoint(x: 52, y: 81), target: 42)
+        XCTAssertEqual(result?.target, 42)
+        XCTAssertEqual(result?.point, CGPoint(x: 52, y: 81))
+        XCTAssertNil(gesture.press(at: 10.2, point: CGPoint(x: 52, y: 81), target: 42))
     }
-    func testChangedAppCannotReceiveDoubleClickPaste() {
-        var gesture = ClickRecognizer(interval: 0.4)
-        _ = gesture.press(at: 10, point: .zero, target: 42)
-        XCTAssertEqual(gesture.press(at: 10.1, point: .zero, target: 43), [.cancelSingle, .scheduleSingle(10.5)])
-        XCTAssertEqual(gesture.singleDue(at: 10.6), .capture(43))
-    }
-    func testDistantClicksDoNotPaste() {
+    func testChangedAppCannotCompleteDoubleClick() {
         var gesture = ClickRecognizer(interval: 0.4)
         _ = gesture.press(at: 10, point: .zero, target: 42)
-        let result = gesture.press(at: 10.1, point: CGPoint(x: 100, y: 100), target: 42)
-        XCTAssertEqual(result, [.cancelSingle, .scheduleSingle(10.5)])
+        XCTAssertNil(gesture.press(at: 10.1, point: .zero, target: 43))
+        XCTAssertEqual(gesture.press(at: 10.2, point: .zero, target: 43)?.target, 43)
     }
-    func testPauseOrDragCancelsPendingCapture() {
+    func testDistantClicksAreSeparateSingles() {
+        var gesture = ClickRecognizer(interval: 0.4)
+        _ = gesture.press(at: 10, point: .zero, target: 42)
+        XCTAssertNil(gesture.press(at: 10.1, point: CGPoint(x: 100, y: 100), target: 42))
+    }
+    func testPauseOrDragCancelsDoubleClickPair() {
         var gesture = ClickRecognizer(interval: 0.4)
         _ = gesture.press(at: 10, point: .zero, target: 42)
         gesture.cancel()
-        XCTAssertNil(gesture.singleDue(at: 11))
-        XCTAssertEqual(gesture.press(at: 12, point: .zero, target: 42), [.cancelSingle, .scheduleSingle(12.4)])
+        XCTAssertNil(gesture.press(at: 10.1, point: .zero, target: 42))
     }
-    func testSlowClicksAreNotDoubleClicks() {
+    func testSlowOrOutOfOrderClicksDoNotTrigger() {
         var gesture = ClickRecognizer(interval: 0.3)
-        _ = gesture.press(at: 1, point: .zero, target: 42)
-        XCTAssertEqual(gesture.singleDue(at: 1.31), .capture(42))
-        XCTAssertEqual(gesture.press(at: 2, point: .zero, target: 42), [.cancelSingle, .scheduleSingle(2.3)])
+        _ = gesture.press(at: 2, point: .zero, target: 42)
+        XCTAssertNil(gesture.press(at: 1, point: .zero, target: 42))
+        XCTAssertNil(gesture.press(at: 3, point: .zero, target: 42))
+    }
+    func testFourClicksProduceTwoGestures() {
+        var gesture = ClickRecognizer(interval: 0.4)
+        let results = [10.0, 10.1, 10.2, 10.3].compactMap { gesture.press(at: $0, point: .zero, target: 42) }
+        XCTAssertEqual(results.count, 2)
+    }
+    func testOnlyConfirmedEditableControlsCanReceivePaste() {
+        for role in ["AXTextArea", "AXTextField", "AXComboBox"] {
+            XCTAssertTrue(InputPolicy.canPaste(role: role, secure: false, enabled: true, editable: nil, valueSettable: true))
+            XCTAssertTrue(InputPolicy.canPaste(role: role, secure: false, enabled: nil, editable: true, valueSettable: false))
+        }
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXStaticText", secure: false, enabled: true, editable: nil, valueSettable: true))
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXTextArea", secure: false, enabled: true, editable: nil, valueSettable: false))
+    }
+    func testReadOnlyDisabledAndSecureFieldsRejectPaste() {
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXTextArea", secure: false, enabled: true, editable: false, valueSettable: true))
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXTextField", secure: false, enabled: false, editable: true, valueSettable: true))
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXTextField", secure: true, enabled: true, editable: true, valueSettable: true))
     }
     func testReverseDragAndBoundaryClamp() {
         let rect = SelectionGeometry.selection(from: CGPoint(x: 90, y: 80), to: CGPoint(x: -20, y: -10),

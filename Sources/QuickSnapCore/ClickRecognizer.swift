@@ -3,16 +3,14 @@ import CoreGraphics
 
 /// Input-independent gesture reducer. The event adapter chooses the physical button.
 public struct ClickRecognizer {
-    public struct Press {
+    private struct Press {
         public let time: TimeInterval
         public let point: CGPoint
         public let target: Int32
     }
-    public enum Action: Equatable {
-        case scheduleSingle(TimeInterval)
-        case cancelSingle
-        case capture(Int32)
-        case paste(Int32)
+    public struct Gesture: Equatable {
+        public let target: Int32
+        public let point: CGPoint
     }
     public let interval: TimeInterval
     public let tolerance: CGFloat
@@ -23,22 +21,16 @@ public struct ClickRecognizer {
         self.tolerance = tolerance
     }
 
-    public mutating func press(at time: TimeInterval, point: CGPoint, target: Int32) -> [Action] {
+    public mutating func press(at time: TimeInterval, point: CGPoint, target: Int32) -> Gesture? {
         let new = Press(time: time, point: point, target: target)
         if let old = pending, time >= old.time, time - old.time <= interval,
            old.target == target, hypot(point.x - old.point.x, point.y - old.point.y) <= tolerance {
             pending = nil
-            return [.cancelSingle, .paste(target)]
+            return Gesture(target: target, point: point)
         }
-        // A changed target or distant second press must never paste into a different app.
+        // Single clicks never perform work; the next matching press completes the gesture.
         pending = new
-        return [.cancelSingle, .scheduleSingle(time + interval)]
-    }
-
-    public mutating func singleDue(at time: TimeInterval) -> Action? {
-        guard let press = pending, time >= press.time + interval else { return nil }
-        pending = nil
-        return .capture(press.target)
+        return nil
     }
 
     public mutating func cancel() { pending = nil }

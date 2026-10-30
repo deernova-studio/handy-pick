@@ -5,13 +5,12 @@ import OSLog
 
 final class MouseTrigger {
     var button: Int64 = 2
-    var onAction: ((ClickRecognizer.Action) -> Void)?
+    var onAction: ((ClickRecognizer.Gesture) -> Void)?
     var onObservation: (() -> Void)?
     private(set) var pressCount = 0
     private(set) var lastButton: Int64?
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
-    private let timer = ClickTimer()
     private var recognizer = ClickRecognizer(interval: NSEvent.doubleClickInterval)
     private var origin: CGPoint?
     private var frontmostPID: Int32 = 0
@@ -54,12 +53,18 @@ final class MouseTrigger {
             if type == .otherMouseDown {
                 owner.origin = event.location
                 let target = owner.frontmostPID
-                let actions = owner.recognizer.press(at: ProcessInfo.processInfo.systemUptime,
+                let gesture = owner.recognizer.press(at: ProcessInfo.processInfo.systemUptime,
                                                      point: event.location, target: target)
-                owner.handle(actions)
+                if let gesture {
+                    // AX hit-testing, activation, screenshot and paste all run outside the event tap.
+                    DispatchQueue.main.async { [weak owner] in
+                        guard let owner, owner.running else { return }
+                        owner.onAction?(gesture)
+                    }
+                }
             } else if type == .otherMouseDragged, let origin = owner.origin,
                       hypot(event.location.x-origin.x, event.location.y-origin.y) > 6 {
-                owner.timer.cancel(); owner.recognizer.cancel()
+                owner.recognizer.cancel()
             } else if type == .otherMouseUp { owner.origin = nil }
             // Only the chosen auxiliary mouse button is consumed; scrolling and other buttons pass through.
             return nil
@@ -71,27 +76,8 @@ final class MouseTrigger {
         return true
     }
 
-    private func handle(_ actions: [ClickRecognizer.Action]) {
-        for action in actions {
-            switch action {
-            case .cancelSingle:
-                timer.cancel()
-            case .scheduleSingle(let deadline):
-                timer.schedule(deadline: deadline) { [weak self] time in
-                    guard let self, self.running,
-                          let action = self.recognizer.singleDue(at: time) else { return }
-                    self.logger.info("Single-click capture dispatched")
-                    self.onAction?(action)
-                }
-            default:
-                // Never run capture or paste work inside the event-tap callback.
-                DispatchQueue.main.async { [weak self] in if self?.running == true { self?.onAction?(action) } }
-            }
-        }
-    }
-
     func stop() {
-        timer.cancel(); recognizer.cancel(); origin = nil
+        recognizer.cancel(); origin = nil
         if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
         activationObserver = nil
         if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }

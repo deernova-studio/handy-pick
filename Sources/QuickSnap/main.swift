@@ -23,16 +23,7 @@ import QuickSnapCore
         if ![2, 3, 4].contains(button) { button = 2 }
         status = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         status.button?.image = NSImage(systemSymbolName: "viewfinder", accessibilityDescription: "Quick Snap")
-        mouse.onAction = { [weak self] action in
-            guard let self, !self.capture.active, !self.preparing else { return }
-            switch action {
-            case .capture(let pid):
-                guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
-                self.beginCapture()
-            case .paste(let pid): self.paste(to: pid)
-            default: break
-            }
-        }
+        mouse.onAction = { [weak self] gesture in self?.handleDoubleClick(gesture) }
         mouse.onObservation = { [weak self] in self?.refreshDiagnostic() }
         refreshMenu()
         showSettings()
@@ -105,6 +96,27 @@ import QuickSnapCore
             catch { inform("截图失败：\(error.localizedDescription)"); showSettings() }
         }
     }
+    private func handleDoubleClick(_ gesture: ClickRecognizer.Gesture) {
+        guard mouse.running, !capture.active, !preparing,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == gesture.target else { return }
+        guard let input = InputTarget.at(gesture.point) else { beginCapture(); return }
+        guard recentImage != nil else {
+            inform("还没有截图，请在输入框外双击\(buttonName)截图")
+            NSSound.beep()
+            return
+        }
+        preparing = true
+        input.focus()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self else { return }
+            defer { self.preparing = false }
+            guard self.mouse.running, input.isFocused() else {
+                self.inform("请先点入该输入框，再双击\(self.buttonName)粘贴")
+                return
+            }
+            self.paste(to: input.pid)
+        }
+    }
     private func present(_ frames: [ScreenFrame], demo: Bool) {
         capture.show(frames) { [weak self] image in
             guard let self else { return }
@@ -125,7 +137,7 @@ import QuickSnapCore
         if let tiff = recentImage.tiffRepresentation { NSPasteboard.general.setData(tiff, forType: .tiff) }
     }
     private func paste(to pid: Int32) {
-        guard recentImage != nil else { inform("还没有截图，请单击\(buttonName)开始"); return }
+        guard recentImage != nil else { inform("还没有截图，请在输入框外双击\(buttonName)截图"); return }
         guard AXIsProcessTrusted(), pid > 0, pid != ProcessInfo.processInfo.processIdentifier,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
             inform("请先将光标放到目标输入框"); return
@@ -155,7 +167,7 @@ import QuickSnapCore
         }
         _ = label("Quick Snap", size: 30, bold: true)
         _ = label("截图，然后继续。", size: 18)
-        _ = label("单击截图按键 → 左键拖动框选 → 松开复制\n在目标输入框双击截图按键 → 粘贴最近截图\nEsc 或右键取消框选。滚轮滚动不受影响。")
+        _ = label("输入框外双击截图按键 → 左键拖动框选 → 松开复制\n输入框内双击截图按键 → 粘贴最近截图\n单击不触发操作。Esc 或右键取消框选。")
         _ = label("首次使用", bold: true)
         _ = label("屏幕录制用于截图；辅助功能用于识别截图按键及模拟 ⌘V。只有点击「开启快捷操作」后才会接管所选按键。", size: 12)
         let permissions = NSStackView(); permissions.orientation = .horizontal; permissions.spacing = 10
