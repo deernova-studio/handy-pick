@@ -10,6 +10,7 @@ import QuickSnapCore
     private var preparing = false
     private var window: NSWindow?
     private var stateLabel: NSTextField?
+    private var diagnosticLabel: NSTextField?
     private var message = "尚未开启"
     private var button: Int {
         get { UserDefaults.standard.object(forKey: "triggerButton") as? Int ?? 2 }
@@ -32,6 +33,7 @@ import QuickSnapCore
             default: break
             }
         }
+        mouse.onObservation = { [weak self] in self?.refreshDiagnostic() }
         refreshMenu()
         showSettings()
         // Starting monitoring always requires an explicit click in this app.
@@ -62,6 +64,12 @@ import QuickSnapCore
         add("退出 Quick Snap", #selector(quit), key: "q", to: menu)
         status.menu = menu
         stateLabel?.stringValue = "\(message) · 默认按键：\(buttonName)"
+        refreshDiagnostic()
+    }
+
+    private func refreshDiagnostic() {
+        let latest = mouse.lastButton.map { " · 最近按键：\($0 + 1)" } ?? ""
+        diagnosticLabel?.stringValue = "监听\(mouse.enabled ? "运行中" : "未运行") · 收到辅助按键 \(mouse.pressCount) 次\(latest)"
     }
 
     @discardableResult private func add(_ title: String, _ action: Selector, key: String = "", to menu: NSMenu) -> NSMenuItem {
@@ -134,7 +142,7 @@ import QuickSnapCore
 
     @objc private func showSettings() {
         if let window { window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); refreshMenu(); return }
-        let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 540, height: 510),
+        let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 540, height: 550),
                              styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         panel.title = "Quick Snap"; panel.isReleasedWhenClosed = false
         let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 18
@@ -156,10 +164,14 @@ import QuickSnapCore
         stack.addArrangedSubview(permissions)
         let actions = NSStackView(); actions.orientation = .horizontal; actions.spacing = 10
         actions.addArrangedSubview(NSButton(title: "开启 / 暂停快捷操作", target: self, action: #selector(toggle)))
+        actions.addArrangedSubview(NSButton(title: "开始截图", target: self, action: #selector(startFromMenu)))
         actions.addArrangedSubview(NSButton(title: "试用示例画布", target: self, action: #selector(demo)))
         stack.addArrangedSubview(actions)
         stateLabel = label(message, size: 12)
         stateLabel?.textColor = .secondaryLabelColor
+        diagnosticLabel = label("", size: 12)
+        diagnosticLabel?.textColor = .secondaryLabelColor
+        refreshDiagnostic()
         _ = label("菜单栏可切换鼠标中键 / 侧键，也可随时暂停。\n截图只留在内存和剪贴板；退出即清除应用内的最近截图。", size: 12)
         panel.contentView = stack; panel.center(); window = panel
         panel.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)

@@ -3,6 +3,41 @@ import CoreGraphics
 @testable import QuickSnapCore
 
 final class QuickSnapCoreTests: XCTestCase {
+    func testEarlyTimerRetriesInsteadOfLosingSingleClick() {
+        var time = 10.0
+        var deliveries: [() -> Void] = []
+        var fired: [TimeInterval] = []
+        let timer = ClickTimer(now: { time }, enqueue: { _, work in deliveries.append(work) })
+        timer.schedule(deadline: 10.3) { fired.append($0) }
+        time = 10.299999
+        deliveries.removeFirst()()
+        XCTAssertTrue(fired.isEmpty)
+        XCTAssertEqual(deliveries.count, 1)
+        time = 10.31
+        deliveries.removeFirst()()
+        XCTAssertEqual(fired, [10.31])
+    }
+    func testCancelledTimerCannotCaptureAfterDoubleClickOrPause() {
+        var deliveries: [() -> Void] = []
+        var fired = false
+        let timer = ClickTimer(now: { 20 }, enqueue: { _, work in deliveries.append(work) })
+        timer.schedule(deadline: 20) { _ in fired = true }
+        timer.cancel()
+        deliveries.removeFirst()()
+        XCTAssertFalse(fired)
+    }
+    func testNewClickReplacesPreviousTimer() {
+        var time = 10.0
+        var deliveries: [() -> Void] = []
+        var fired: [String] = []
+        let timer = ClickTimer(now: { time }, enqueue: { _, work in deliveries.append(work) })
+        timer.schedule(deadline: 10.3) { _ in fired.append("old") }
+        timer.schedule(deadline: 10.4) { _ in fired.append("new") }
+        time = 10.5
+        deliveries.removeFirst()()
+        deliveries.removeFirst()()
+        XCTAssertEqual(fired, ["new"])
+    }
     func testSingleWaitsForDoubleClickWindow() {
         var gesture = ClickRecognizer(interval: 0.3)
         XCTAssertEqual(gesture.press(at: 10, point: .zero, target: 42), [.cancelSingle, .scheduleSingle(10.3)])
