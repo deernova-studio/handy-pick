@@ -39,8 +39,6 @@ import QuickSnapCore
         status.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         popover.behavior = .transient; popover.delegate = self; popover.contentViewController = panel
         panel.onRecord = { [weak self] in self?.beginRecording() }
-        panel.onToggle = { [weak self] in self?.toggle() }
-        panel.onQuit = { [weak self] in self?.quit() }
         panel.onPermission = { [weak self] in self?.requestPermission() }
         trigger.onAction = { [weak self] in self?.handleDoubleClick($0) }
         trigger.onRecorded = { [weak self] value in
@@ -73,9 +71,8 @@ import QuickSnapCore
     }
 
     private func refresh() {
-        status.button?.toolTip = "Quick Snap · 双击\(binding.displayName)截图 / 粘贴"
-        panel.update(binding: binding.displayName, recording: trigger.recording, running: trigger.running,
-                     message: message, needsPermission: !permissionsReady)
+        status.button?.toolTip = "Quick Snap · 双击\(binding.displayName)截图 / 粘贴\n\(message)"
+        panel.update(binding: binding.displayName, recording: trigger.recording, needsPermission: !permissionsReady)
     }
     private func inform(_ text: String) { message = text; refresh() }
 
