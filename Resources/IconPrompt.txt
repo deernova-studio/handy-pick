@@ -7,5 +7,6 @@ Line-weight revision prompt:
 Edit this exact Quick Snap scissors-and-picture icon. Keep the existing composition, tilted rectangular picture, flowing mountain strokes, two scissors loops, crossing blades, pivot hole, positions and proportions. Increase the black line/stroke weight by about 35 percent, especially the picture-frame outline and scissors loop outlines, so it remains clearly legible as a tiny macOS menu-bar icon. Preserve open white holes in the scissor handles and pivot, preserve clear separation between blades and picture, preserve the flowing tapered ends and the overall elegance. Keep pure solid black on a pure white background. No redesign, no added elements, no letters, no gradient, no shadows, no texture. Return one finished square icon, same framing and generous white margins.
 
 AppIcon.png: final white-background, heavier-stroke artwork.
-QuickSnap.icns and white-background MenuIcon.png: resized/packaged by Scripts/build-icons.sh.
-MenuIcon.png is rendered as a non-template NSImage so macOS preserves the white background and black artwork.
+QuickSnap.icns: resized/packaged app artwork, by Scripts/build-icons.sh.
+The final menu-bar icon is separate code-native vector artwork in Sources/QuickSnap/MenuBarIcon.swift: 22 x 16 points, transparent corners, a small rounded white background, black scissors and an open photo corner. It is not a scaled copy of the generated app artwork.
+MenuIcon.png and MenuIcon-preview.png are exported from that shared drawing by Scripts/render-menu-icon.swift.

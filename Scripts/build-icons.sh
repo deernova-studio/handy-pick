@@ -9,6 +9,6 @@ for size in 16 32 128 256 512; do
     sips -z "$retina" "$retina" Resources/AppIcon.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns "$iconset" -o Resources/QuickSnap.icns
-# Use the white-background artwork in the menu bar as requested.
-sips -c 1040 1040 Resources/AppIcon.png --out build/menu-icon-cropped.png >/dev/null
-sips -z 38 38 build/menu-icon-cropped.png --out Resources/MenuIcon.png >/dev/null
+# The menu-bar glyph has its own vector geometry at 22 × 16 points.
+swiftc -O Sources/QuickSnap/MenuBarIcon.swift Scripts/render-menu-icon.swift -o build/render-menu-icon
+build/render-menu-icon
