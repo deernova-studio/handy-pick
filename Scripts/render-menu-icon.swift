@@ -21,7 +21,7 @@ import AppKit
         try save("Resources/MenuIcon-preview.png", size: NSSize(width: 80, height: 24), scale: 4) {
             NSColor(calibratedRed: 0.24, green: 0.52, blue: 0.73, alpha: 1).setFill()
             NSRect(x: 0, y: 0, width: 80, height: 24).fill()
-            MenuBarIcon.make(tint: .white).draw(in: NSRect(x: 31, y: 3, width: 18, height: 18))
+            icon.draw(in: NSRect(x: 29, y: 4, width: 22, height: 16))
         }
     }
 }
