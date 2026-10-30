@@ -34,7 +34,7 @@ import QuickSnapCore
         NSApp.setActivationPolicy(.accessory)
         status = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let url = Bundle.main.url(forResource: "MenuIcon", withExtension: "png"), let icon = NSImage(contentsOf: url) {
-            icon.size = NSSize(width: 19, height: 19); icon.isTemplate = true; status.button?.image = icon
+            icon.size = NSSize(width: 19, height: 19); icon.isTemplate = false; status.button?.image = icon
         } else { status.button?.image = NSImage(systemSymbolName: "viewfinder", accessibilityDescription: "Quick Snap") }
         status.button?.setAccessibilityLabel("Quick Snap")
         status.button?.target = self; status.button?.action = #selector(statusClicked)
