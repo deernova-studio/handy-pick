@@ -2,7 +2,7 @@ import AppKit
 
 /// A white menu-bar badge with our simplified scissors-and-photo mark cut out of its alpha.
 enum MenuBarIcon {
-    static let size = NSSize(width: 18, height: 18)
+    static let size = NSSize(width: 18, height: 22)
 
     static func make() -> NSImage {
         let image = NSImage(size: size)
@@ -15,9 +15,10 @@ enum MenuBarIcon {
             let context = NSGraphicsContext(bitmapImageRep: bitmap)!
             NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = context
             NSColor.white.setFill()
-            NSBezierPath(roundedRect: NSRect(x: 1, y: 1, width: 16, height: 16),
+            NSBezierPath(roundedRect: NSRect(x: 1, y: 1, width: 16, height: 20),
                          xRadius: 4, yRadius: 4).fill()
             context.cgContext.setBlendMode(.clear)
+            context.cgContext.translateBy(x: 0, y: 2)
             drawMark()
             NSGraphicsContext.restoreGraphicsState()
             image.addRepresentation(bitmap)
