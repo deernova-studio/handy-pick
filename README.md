@@ -35,7 +35,7 @@ zsh Scripts/build.sh
 
 ## 图标
 
-黑白的剪刀与图片组合，用流畅、简洁的线条表达剪取画面。`Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `Sources/QuickSnap/MenuBarIcon.swift` 绘制的 22 × 16 点白色圆角小底；沿用应用图标的倾斜图片与剪刀轮廓，简化后的线条以透明 alpha 镂空，透出菜单栏底色。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `Resources/IconPrompt.txt`。运行 `zsh Scripts/build-icons.sh` 可重新生成不同尺寸资源。
+黑白的剪刀与图片组合，用流畅、简洁的线条表达剪取画面。`Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `Sources/QuickSnap/MenuBarIcon.swift` 绘制的 18 × 18 点的近方形白色圆角小底；沿用应用图标的倾斜图片与剪刀轮廓，简化后的线条以透明 alpha 镂空，透出菜单栏底色。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `Resources/IconPrompt.txt`。运行 `zsh Scripts/build-icons.sh` 可重新生成不同尺寸资源。
 
 ## 行为与边界
 

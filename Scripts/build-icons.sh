@@ -9,6 +9,6 @@ for size in 16 32 128 256 512; do
     sips -z "$retina" "$retina" Resources/AppIcon.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns "$iconset" -o Resources/QuickSnap.icns
-# Export the white menu-bar badge with transparent brand-mark cutouts at 22 × 16 points.
+# Export the white menu-bar badge with transparent brand-mark cutouts at 18 × 18 points.
 swiftc -O Sources/QuickSnap/MenuBarIcon.swift Scripts/render-menu-icon.swift -o build/render-menu-icon
 build/render-menu-icon
