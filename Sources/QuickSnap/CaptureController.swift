@@ -78,21 +78,6 @@ enum CaptureFailure: LocalizedError {
         callback?(image)
     }
 
-    static func demoFrames() -> [ScreenFrame] {
-        NSScreen.screens.compactMap { screen in
-            let size = screen.frame.size
-            let image = NSImage(size: size, flipped: false) { rect in
-                NSColor(calibratedRed: 0.08, green: 0.13, blue: 0.19, alpha: 1).setFill(); rect.fill()
-                let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 38, weight: .semibold), .foregroundColor: NSColor.white]
-                ("Quick Snap · 示例画布" as NSString).draw(at: NSPoint(x: 100, y: size.height-180), withAttributes: attrs)
-                ("拖动框选，松开复制 · Esc 取消" as NSString).draw(at: NSPoint(x: 100, y: size.height-245),
-                    withAttributes: [.font: NSFont.systemFont(ofSize: 22), .foregroundColor: NSColor.lightGray])
-                return true
-            }
-            guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
-            return ScreenFrame(screen: screen, image: cg)
-        }
-    }
 }
 
 final class SelectionPanel: NSPanel {
