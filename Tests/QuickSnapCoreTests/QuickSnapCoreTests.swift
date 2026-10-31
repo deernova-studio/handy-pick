@@ -106,6 +106,24 @@ final class QuickSnapCoreTests: XCTestCase {
         XCTAssertFalse(InputPolicy.canPaste(role: "AXTextField", secure: false, enabled: false, editable: true, valueSettable: true))
         XCTAssertFalse(InputPolicy.canPaste(role: "AXTextField", secure: true, enabled: true, editable: true, valueSettable: true))
     }
+    func testWebEditorCanReplaceSelectionWithoutSettingWholeValue() {
+        XCTAssertTrue(InputPolicy.canPaste(role: "AXTextArea", secure: false, enabled: true,
+                        editable: nil, valueSettable: false, selectedTextSettable: true))
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXTextArea", secure: false, enabled: true,
+                        editable: false, valueSettable: false, selectedTextSettable: true))
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXStaticText", secure: false, enabled: true,
+                        editable: nil, valueSettable: false, selectedTextSettable: true))
+    }
+    func testGenericEditorHostNeedsExplicitEditingCapability() {
+        XCTAssertTrue(InputPolicy.canPaste(role: "AXGroup", secure: false, enabled: true,
+                        editable: true, valueSettable: false, selectedTextSettable: true))
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXGroup", secure: false, enabled: true,
+                        editable: nil, valueSettable: false, selectedTextSettable: true))
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXGroup", secure: false, enabled: true,
+                        editable: true, valueSettable: false))
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXTextField", secure: true, enabled: true,
+                        editable: true, valueSettable: false, selectedTextSettable: true))
+    }
     func testReverseDragAndBoundaryClamp() {
         let rect = SelectionGeometry.selection(from: CGPoint(x: 90, y: 80), to: CGPoint(x: -20, y: -10),
                                                in: CGRect(x: 0, y: 0, width: 100, height: 100))

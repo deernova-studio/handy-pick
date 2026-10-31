@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import QuickSnapCore
+import OSLog
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     private var status: NSStatusItem!
@@ -11,6 +12,7 @@ import QuickSnapCore
     private var recentImage: NSImage?
     private var preparing = false
     private var message = ""
+    private let gestureLog = Logger(subsystem: "studio.deernova.quick-snap", category: "gesture")
     private var binding: ShortcutBinding {
         get {
             if let data = UserDefaults.standard.data(forKey: "shortcutBinding"),
@@ -137,14 +139,26 @@ import QuickSnapCore
         guard trigger.running, !capture.active, !preparing,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == gesture.target else { return }
         shortcutPanel.dismiss()
-        guard let input = InputTarget.at(gesture.point) else { beginCapture(); return }
-        guard recentImage != nil else { inform("请先在输入区外双击截图"); NSSound.beep(); return }
+        guard let input = InputTarget.at(gesture.point) else {
+            gestureLog.notice("Double action: no editable target; capturing")
+            beginCapture(); return
+        }
+        guard recentImage != nil else {
+            gestureLog.notice("Double action: input found, no screenshot in this session")
+            inform("请先在输入区外双击截图"); NSSound.beep(); return
+        }
         preparing = true; input.focus()
-        DispatchQueue.main.asyncAfter(deadline: .now()+0.1) { [weak self] in
+        Task { [weak self] in
             guard let self else { return }
             defer { self.preparing = false }
-            guard self.trigger.running, input.isFocused() else { self.inform("请先点入输入框再双击"); return }
-            self.paste(to: input.pid)
+            // Native and web editors may update accessibility focus asynchronously.
+            for _ in 0..<10 {
+                try? await Task.sleep(for: .milliseconds(60))
+                guard self.trigger.running, !self.capture.active else { return }
+                if input.isFocused() { self.paste(to: input.pid); return }
+            }
+            self.gestureLog.notice("Double action: editable target found, focus not confirmed")
+            self.inform("请先点入输入框再双击")
         }
     }
 
@@ -165,6 +179,7 @@ import QuickSnapCore
         down?.setIntegerValueField(.eventSourceUserData, value: ShortcutTrigger.syntheticEventTag)
         up?.setIntegerValueField(.eventSourceUserData, value: ShortcutTrigger.syntheticEventTag)
         down?.post(tap: .cghidEventTap); up?.post(tap: .cghidEventTap)
+        gestureLog.notice("Double action: screenshot copied and paste shortcut posted")
         inform("已粘贴最近截图")
     }
 
