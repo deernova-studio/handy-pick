@@ -2,10 +2,10 @@ import AppKit
 import ApplicationServices
 import QuickSnapCore
 
-@MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     private var status: NSStatusItem!
-    private let popover = NSPopover()
     private let panel = ShortcutPopover()
+    private lazy var shortcutPanel = ShortcutPanel(editor: panel)
     private let trigger = ShortcutTrigger()
     private let capture = CaptureController()
     private var recentImage: NSImage?
@@ -37,7 +37,10 @@ import QuickSnapCore
         status.button?.setAccessibilityLabel("Quick Snap")
         status.button?.target = self; status.button?.action = #selector(statusClicked)
         status.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        popover.behavior = .transient; popover.delegate = self; popover.contentViewController = panel
+        shortcutPanel.onDismiss = { [weak self] in
+            self?.trigger.cancelRecording(); self?.refresh()
+        }
+        shortcutPanel.isRecording = { [weak self] in self?.trigger.recording ?? false }
         panel.onRecord = { [weak self] in self?.beginRecording() }
         panel.onPermission = { [weak self] in self?.requestPermission() }
         trigger.onAction = { [weak self] in self?.handleDoubleClick($0) }
@@ -54,20 +57,16 @@ import QuickSnapCore
 
     @objc private func statusClicked() {
         if NSApp.currentEvent?.type == .rightMouseUp {
+            shortcutPanel.dismiss()
             status.menu = makeMenu(); status.button?.performClick(nil); status.menu = nil
         } else { togglePopover() }
     }
 
     private func togglePopover() {
-        if popover.isShown { popover.performClose(nil); return }
+        if shortcutPanel.isVisible { shortcutPanel.dismiss(); return }
         guard let button = status.button else { return }
         refresh()
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    func popoverDidClose(_ notification: Notification) {
-        trigger.cancelRecording(); refresh()
+        shortcutPanel.show(below: button)
     }
 
     private func refresh() {
@@ -112,13 +111,13 @@ import QuickSnapCore
     @objc private func openRecorder() { DispatchQueue.main.async { self.togglePopover() } }
 
     @objc private func startFromMenu() {
-        popover.performClose(nil)
+        shortcutPanel.dismiss()
         DispatchQueue.main.asyncAfter(deadline: .now()+0.15) { self.beginCapture() }
     }
     private func beginCapture() {
         guard !capture.active, !preparing else { return }
         guard CGPreflightScreenCaptureAccess() else { inform("请先授予屏幕录制权限"); return }
-        popover.performClose(nil); preparing = true; trigger.suspended = true
+        shortcutPanel.dismiss(); preparing = true; trigger.suspended = true
         Task {
             defer { preparing = false }
             do {
@@ -135,8 +134,9 @@ import QuickSnapCore
         }
     }
     private func handleDoubleClick(_ gesture: ClickRecognizer.Gesture) {
-        guard trigger.running, !capture.active, !preparing, !popover.isShown,
+        guard trigger.running, !capture.active, !preparing,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == gesture.target else { return }
+        shortcutPanel.dismiss()
         guard let input = InputTarget.at(gesture.point) else { beginCapture(); return }
         guard recentImage != nil else { inform("请先在输入区外双击截图"); NSSound.beep(); return }
         preparing = true; input.focus()
@@ -169,7 +169,7 @@ import QuickSnapCore
     }
 
     @objc private func requestPermission() {
-        popover.performClose(nil)
+        shortcutPanel.dismiss()
         if !AXIsProcessTrusted() {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             _ = AXIsProcessTrustedWithOptions(options)
