@@ -33,6 +33,10 @@ zsh Scripts/build.sh
 
 建议持续使用同一个 Apple Development 身份构建。切换签名身份（包括切回 ad-hoc）可能使 macOS 要求重新授予权限。
 
+## 签名 DMG 与发布
+
+发布流程参考 linse，使用 Developer ID、强化运行时和 Apple 公证，生成 Apple 芯片版 DMG，上传到私有 Release。仅手动触发，详见[配置和发布说明](docs/github-actions.md)。现有本机开发构建入口继续保留。
+
 ## 图标
 
 黑白的剪刀与图片组合，用流畅、简洁的线条表达剪取画面。`Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `Sources/QuickSnap/MenuBarIcon.swift` 绘制的 宽 22、高 18 点的白色圆角小底；沿用应用图标的倾斜图片与剪刀轮廓，简化后的线条以透明 alpha 镂空，透出菜单栏底色。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `Resources/IconPrompt.txt`。运行 `zsh Scripts/build-icons.sh` 可重新生成不同尺寸资源。

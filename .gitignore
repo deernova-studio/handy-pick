@@ -7,3 +7,9 @@ xcuserdata/
 *.p12
 *.mobileprovision
 .env
+.env.*
+*.pfx
+*.p8
+*.key
+*.pem
+__pycache__/

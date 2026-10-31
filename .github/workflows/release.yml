@@ -1,0 +1,121 @@
+name: 发布 macOS 版本
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '新版本号，例如 0.2.1（不要填 v）'
+        type: string
+        required: true
+        default: '0.2.1'
+      build_number:
+        description: '新构建号，例如 15'
+        type: string
+        required: true
+        default: '15'
+      notes:
+        description: '本次功能更新或问题修复（可选）'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-release
+  cancel-in-progress: false
+
+env:
+  QUICK_SNAP_VERSION: ${{ inputs.version }}
+  QUICK_SNAP_BUILD_NUMBER: ${{ inputs.build_number }}
+  QUICK_SNAP_RELEASE_NOTES: ${{ inputs.notes }}
+
+jobs:
+  prepare:
+    name: 校验版本与发布授权
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: 检查分支、仓库与版本冲突
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 Scripts/github_release.py preflight
+      - name: 检查签名配置是否齐全
+        env:
+          HAS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 != '' }}
+          HAS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD != '' }}
+          HAS_NOTARY_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
+          APPLE_ID: ${{ vars.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          if [[ "$HAS_CERTIFICATE" != true || "$HAS_CERTIFICATE_PASSWORD" != true || "$HAS_NOTARY_PASSWORD" != true || -z "$APPLE_ID" || ! "$APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]; then
+            echo '::error::请先按 docs/github-actions.md 配置 3 个 Secrets 和 2 个 Variables。'
+            exit 1
+          fi
+
+  build:
+    name: Apple Silicon 打包、签名与公证
+    needs: prepare
+    runs-on: macos-15
+    timeout-minutes: 75
+    outputs:
+      artifact_id: ${{ steps.artifact.outputs.artifact-id }}
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: 测试与编译
+        run: bash Scripts/check-ci.sh
+      - name: 安装临时签名身份与公证授权
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_ID: ${{ vars.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: bash Scripts/ci-signing.sh install
+      - name: 打包并签名
+        run: bash Scripts/package.sh --release
+      - name: Apple 公证与 DMG 验证
+        run: bash Scripts/notarize.sh "build/release-candidates/QuickSnap-${QUICK_SNAP_VERSION}-build${QUICK_SNAP_BUILD_NUMBER}/Quick Snap.app"
+      - name: 清理签名钥匙串
+        if: always()
+        run: bash Scripts/ci-signing.sh cleanup
+      - name: 保存已公证的安装包
+        id: artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/releases/QuickSnap-${{ inputs.version }}-build${{ inputs.build_number }}/*.dmg
+            build/releases/QuickSnap-${{ inputs.version }}-build${{ inputs.build_number }}/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: 发布到私有仓库 Release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: build/github-release
+      - name: 校验文件并发布
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 Scripts/github_release.py publish build/github-release

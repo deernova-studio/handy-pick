@@ -1,5 +1,12 @@
 # 验证记录
 
+## 2026-11-01 发布流程
+
+- 参照同一组织 linse 的手动发布流程，增加 Developer ID 打包、临时 CI 钥匙串、应用及 DMG 公证/附票、Gatekeeper 检查、SHA-256 和草稿 Release 验证后发布。保留本机开发构建，不新增 push / PR 自动任务。
+- `Scripts/check-ci.sh` 通过：14 项发布脚本测试、23 项 Swift 核心测试、arm64 Release 编译；工作流经 actionlint 校验通过。开发打包通过，bundle ID、菜单栏属性与 arm64 架构保持正确，严格签名校验通过。
+- 这里只验证了临时签名的开发包。当前 Mac 无 Developer ID Application 私钥，新仓库的三个签名 Secrets 尚未配置，因此尚未生成正式签名/公证的 DMG，也未运行正式发布。
+- 已将 linse 的 APPLE_ID / APPLE_TEAM_ID 两项 Variables 配置到 Quick Snap；没有读取或导出 GitHub Secrets，签名私钥没有进入 Git 历史。
+
 2026-10-31，macOS 26.2 / Apple Silicon，Xcode 26.6，Swift 6.3.3。
 
 ## 已通过
