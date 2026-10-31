@@ -2,9 +2,35 @@ import AppKit
 import ApplicationServices
 import QuickSnapCore
 
-struct InputTarget {
+@MainActor struct InputTarget {
     let element: AXUIElement
     let pid: pid_t
+
+    static func resolve(at point: CGPoint, foregroundPID: pid_t) async -> InputTarget? {
+        let enabledWebAccessibility = enableWebAccessibility(for: foregroundPID)
+        // Chromium publishes its renderer accessibility tree asynchronously.
+        if enabledWebAccessibility { try? await Task.sleep(for: .milliseconds(100)) }
+        for attempt in 0..<(enabledWebAccessibility ? 4 : 1) {
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == foregroundPID else { return nil }
+            if let target = at(point) { return target }
+            if attempt < 3, enabledWebAccessibility { try? await Task.sleep(for: .milliseconds(80)) }
+        }
+        return nil
+    }
+
+    private static func enableWebAccessibility(for pid: pid_t) -> Bool {
+        guard AXIsProcessTrusted(), pid > 0, pid != ProcessInfo.processInfo.processIdentifier,
+              let bundle = NSRunningApplication(processIdentifier: pid)?.bundleURL else { return false }
+        // Electron documents this opt-in for third-party accessibility clients:
+        // https://www.electronjs.org/docs/latest/tutorial/accessibility#macos
+        let frameworks = bundle.appendingPathComponent("Contents/Frameworks")
+        guard FileManager.default.fileExists(atPath: frameworks.appendingPathComponent("Electron Framework.framework").path) else { return false }
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.1)
+        let name = "AXManualAccessibility"
+        guard attribute(app, name) as? Bool != true else { return false }
+        return AXUIElementSetAttributeValue(app, name as CFString, kCFBooleanTrue) == .success
+    }
 
     /// Hit-test the pointer location, never just the previously focused input.
     static func at(_ point: CGPoint) -> InputTarget? {

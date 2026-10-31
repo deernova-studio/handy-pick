@@ -136,21 +136,31 @@ import OSLog
         }
     }
     private func handleDoubleClick(_ gesture: ClickRecognizer.Gesture) {
-        guard trigger.running, !capture.active, !preparing,
-              NSWorkspace.shared.frontmostApplication?.processIdentifier == gesture.target else { return }
+        guard trigger.running, !capture.active, !preparing else { return }
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == gesture.target else {
+            gestureLog.notice("Double action: foreground changed before routing")
+            return
+        }
         shortcutPanel.dismiss()
-        guard let input = InputTarget.at(gesture.point) else {
-            gestureLog.notice("Double action: no editable target; capturing")
-            beginCapture(); return
-        }
-        guard recentImage != nil else {
-            gestureLog.notice("Double action: input found, no screenshot in this session")
-            inform("请先在输入区外双击截图"); NSSound.beep(); return
-        }
-        preparing = true; input.focus()
+        preparing = true
         Task { [weak self] in
             guard let self else { return }
+            let input = await InputTarget.resolve(at: gesture.point, foregroundPID: gesture.target)
+            guard self.trigger.running, !self.capture.active,
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier == gesture.target else {
+                self.preparing = false; return
+            }
+            guard let input else {
+                self.preparing = false
+                self.gestureLog.notice("Double action: no editable target; capturing")
+                self.beginCapture(); return
+            }
             defer { self.preparing = false }
+            guard self.recentImage != nil else {
+                self.gestureLog.notice("Double action: input found, no screenshot in this session")
+                self.inform("请先在输入区外双击截图"); NSSound.beep(); return
+            }
+            input.focus()
             // Native and web editors may update accessibility focus asynchronously.
             for _ in 0..<10 {
                 try? await Task.sleep(for: .milliseconds(60))
