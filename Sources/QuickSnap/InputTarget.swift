@@ -38,9 +38,13 @@ import QuickSnapCore
         let system = AXUIElementCreateSystemWide()
         AXUIElementSetMessagingTimeout(system, 0.1)
         var hit: AXUIElement?
-        guard AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &hit) == .success else { return nil }
+        guard AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &hit) == .success,
+              let hit else { return nil }
+        var hitPID: pid_t = 0
+        guard AXUIElementGetPid(hit, &hitPID) == .success,
+              hitPID > 0, hitPID != ProcessInfo.processInfo.processIdentifier else { return nil }
         let deadline = ProcessInfo.processInfo.systemUptime + 0.35
-        var current = hit
+        var current: AXUIElement? = hit
         // Text inside a web editor may be a child of the editable control.
         for _ in 0..<12 {
             guard let element = current, ProcessInfo.processInfo.systemUptime < deadline else { break }
@@ -48,28 +52,74 @@ import QuickSnapCore
             let role = attribute(element, kAXRoleAttribute) as? String ?? ""
             let secure = (attribute(element, kAXSubroleAttribute) as? String) == (kAXSecureTextFieldSubrole as String)
             if secure { return nil }
+            // Chromium advertises this only for editable nodes. A contenteditable host
+            // need not support replacing its whole AXValue or AXSelectedText via AX.
+            if let host = webEditableHost(of: element), let target = target(for: host, webHost: true), target.pid == hitPID {
+                return target
+            }
             let textRole = [kAXTextFieldRole as String, kAXTextAreaRole as String, kAXComboBoxRole as String].contains(role)
             let editable = attribute(element, kAXIsEditableAttribute) as? Bool
+            if textRole, editable == false || attribute(element, kAXEnabledAttribute) as? Bool == false { return nil }
             // Avoid slow editability queries on unrelated ancestors and static text children.
             let candidate = textRole || (role == kAXGroupRole as String && editable == true)
-            if InputPolicy.canPaste(role: role, secure: secure,
-                    enabled: attribute(element, kAXEnabledAttribute) as? Bool,
-                    editable: editable,
-                    valueSettable: candidate && isSettable(element, kAXValueAttribute),
-                    selectedTextSettable: candidate && isSettable(element, kAXSelectedTextAttribute)) {
-                var pid: pid_t = 0
-                guard AXUIElementGetPid(element, &pid) == .success,
-                      pid > 0, pid != ProcessInfo.processInfo.processIdentifier else { return nil }
-                return InputTarget(element: element, pid: pid)
-            }
+            if candidate, let target = target(for: element) { return target }
             // An explicit non-editable text control must not inherit eligibility from a parent.
-            if textRole { return nil }
+            if textRole { break }
             guard let parent = attribute(element, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID() else { break }
             let next = unsafeBitCast(parent, to: AXUIElement.self)
             if CFEqual(next, element) { break }
             current = next
         }
-        return nil
+        // Some web hit tests return a containing group instead of the editor. Use
+        // the focused control only when the pointer is inside its own bounds and
+        // the topmost hit still belongs to the same foreground application.
+        guard let focused = elementAttribute(AXUIElementCreateApplication(hitPID), kAXFocusedUIElementAttribute) else { return nil }
+        let webHost = webEditableHost(of: focused)
+        let candidate = webHost ?? focused
+        guard let target = target(for: candidate, webHost: webHost != nil),
+              let bounds = bounds(of: candidate),
+              InputPolicy.canUseFocusedInput(at: point, bounds: bounds, hitPID: hitPID,
+                  focusedPID: target.pid, foregroundPID: NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0) else { return nil }
+        return target
+    }
+
+    private static func target(for element: AXUIElement, webHost: Bool = false) -> InputTarget? {
+        AXUIElementSetMessagingTimeout(element, 0.1)
+        let role = attribute(element, kAXRoleAttribute) as? String ?? ""
+        let secure = attribute(element, kAXSubroleAttribute) as? String == kAXSecureTextFieldSubrole as String
+        let editable = attribute(element, kAXIsEditableAttribute) as? Bool
+        guard InputPolicy.canPaste(role: role, secure: secure,
+                  enabled: attribute(element, kAXEnabledAttribute) as? Bool, editable: editable,
+                  valueSettable: isSettable(element, kAXValueAttribute),
+                  selectedTextSettable: isSettable(element, kAXSelectedTextAttribute), webEditableHost: webHost) else { return nil }
+        var pid: pid_t = 0
+        guard AXUIElementGetPid(element, &pid) == .success,
+              pid > 0, pid != ProcessInfo.processInfo.processIdentifier else { return nil }
+        return InputTarget(element: element, pid: pid)
+    }
+
+    private static func webEditableHost(of element: AXUIElement) -> AXUIElement? {
+        var names: CFArray?
+        guard AXUIElementCopyAttributeNames(element, &names) == .success,
+              let names = names as? [String], names.contains("AXEditableAncestor") else { return nil }
+        // Requiring the attribute to be advertised matters: Chromium's getter can
+        // otherwise return a text-field ancestor even when the queried node is read-only.
+        return elementAttribute(element, "AXEditableAncestor")
+    }
+
+    private static func bounds(of element: AXUIElement) -> CGRect? {
+        guard let position = attribute(element, kAXPositionAttribute), CFGetTypeID(position) == AXValueGetTypeID(),
+              let size = attribute(element, kAXSizeAttribute), CFGetTypeID(size) == AXValueGetTypeID() else { return nil }
+        var origin = CGPoint.zero
+        var dimensions = CGSize.zero
+        guard AXValueGetValue(unsafeBitCast(position, to: AXValue.self), .cgPoint, &origin),
+              AXValueGetValue(unsafeBitCast(size, to: AXValue.self), .cgSize, &dimensions) else { return nil }
+        return CGRect(origin: origin, size: dimensions)
+    }
+
+    private static func elementAttribute(_ element: AXUIElement, _ name: String) -> AXUIElement? {
+        guard let value = attribute(element, name), CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return unsafeBitCast(value, to: AXUIElement.self)
     }
 
     func focus() {

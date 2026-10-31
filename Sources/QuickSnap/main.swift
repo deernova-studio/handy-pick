@@ -77,6 +77,13 @@ import OSLog
     }
     private func inform(_ text: String) { message = text; refresh() }
 
+    private func recordGestureOutcome(_ outcome: String) {
+        gestureLog.notice("\(outcome, privacy: .public)")
+        // A single local status code remains available when unified logging is disabled.
+        // It contains no input text, image, application identifier or control content.
+        UserDefaults.standard.set(outcome, forKey: "lastGestureOutcome")
+    }
+
     private func startMonitoring() {
         trigger.stop(); trigger.binding = binding
         guard permissionsReady else { inform("需要屏幕录制和辅助功能权限"); return }
@@ -138,7 +145,7 @@ import OSLog
     private func handleDoubleClick(_ gesture: ClickRecognizer.Gesture) {
         guard trigger.running, !capture.active, !preparing else { return }
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == gesture.target else {
-            gestureLog.notice("Double action: foreground changed before routing")
+            recordGestureOutcome("foreground-changed")
             return
         }
         shortcutPanel.dismiss()
@@ -152,14 +159,15 @@ import OSLog
             }
             guard let input else {
                 self.preparing = false
-                self.gestureLog.notice("Double action: no editable target; capturing")
+                self.recordGestureOutcome("no-input-capture")
                 self.beginCapture(); return
             }
             defer { self.preparing = false }
             guard self.recentImage != nil else {
-                self.gestureLog.notice("Double action: input found, no screenshot in this session")
+                self.recordGestureOutcome("input-found-no-screenshot")
                 self.inform("请先在输入区外双击截图"); NSSound.beep(); return
             }
+            self.recordGestureOutcome("input-found-focus-pending")
             input.focus()
             // Native and web editors may update accessibility focus asynchronously.
             for _ in 0..<10 {
@@ -167,7 +175,7 @@ import OSLog
                 guard self.trigger.running, !self.capture.active else { return }
                 if input.isFocused() { self.paste(to: input.pid); return }
             }
-            self.gestureLog.notice("Double action: editable target found, focus not confirmed")
+            self.recordGestureOutcome("input-found-focus-unconfirmed")
             self.inform("请先点入输入框再双击")
         }
     }
@@ -189,7 +197,7 @@ import OSLog
         down?.setIntegerValueField(.eventSourceUserData, value: ShortcutTrigger.syntheticEventTag)
         up?.setIntegerValueField(.eventSourceUserData, value: ShortcutTrigger.syntheticEventTag)
         down?.post(tap: .cghidEventTap); up?.post(tap: .cghidEventTap)
-        gestureLog.notice("Double action: screenshot copied and paste shortcut posted")
+        recordGestureOutcome("paste-shortcut-posted")
         inform("已粘贴最近截图")
     }
 

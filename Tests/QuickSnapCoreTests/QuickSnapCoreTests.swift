@@ -124,6 +124,33 @@ final class QuickSnapCoreTests: XCTestCase {
         XCTAssertFalse(InputPolicy.canPaste(role: "AXTextField", secure: true, enabled: true,
                         editable: true, valueSettable: false, selectedTextSettable: true))
     }
+    func testAdvertisedWebEditableHostDoesNotNeedAXValueSetter() {
+        for role in ["AXTextArea", "AXGroup"] {
+            XCTAssertTrue(InputPolicy.canPaste(role: role, secure: false, enabled: true,
+                            editable: nil, valueSettable: false, webEditableHost: true))
+            XCTAssertFalse(InputPolicy.canPaste(role: role, secure: false, enabled: true,
+                            editable: false, valueSettable: false, webEditableHost: true))
+            XCTAssertFalse(InputPolicy.canPaste(role: role, secure: true, enabled: true,
+                            editable: nil, valueSettable: false, webEditableHost: true))
+            XCTAssertFalse(InputPolicy.canPaste(role: role, secure: false, enabled: false,
+                            editable: nil, valueSettable: false, webEditableHost: true))
+        }
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXButton", secure: false, enabled: true,
+                        editable: nil, valueSettable: false, webEditableHost: true))
+    }
+    func testFocusedEditorFallbackRequiresPointerInsideSameForegroundApp() {
+        let bounds = CGRect(x: 100, y: 200, width: 300, height: 100)
+        XCTAssertTrue(InputPolicy.canUseFocusedInput(at: CGPoint(x: 200, y: 250), bounds: bounds,
+                        hitPID: 42, focusedPID: 42, foregroundPID: 42))
+        XCTAssertFalse(InputPolicy.canUseFocusedInput(at: CGPoint(x: 99, y: 250), bounds: bounds,
+                        hitPID: 42, focusedPID: 42, foregroundPID: 42))
+        XCTAssertFalse(InputPolicy.canUseFocusedInput(at: CGPoint(x: 200, y: 250), bounds: bounds,
+                        hitPID: 43, focusedPID: 42, foregroundPID: 42))
+        XCTAssertFalse(InputPolicy.canUseFocusedInput(at: CGPoint(x: 200, y: 250), bounds: bounds,
+                        hitPID: 42, focusedPID: 42, foregroundPID: 43))
+        XCTAssertFalse(InputPolicy.canUseFocusedInput(at: CGPoint(x: 200, y: 250), bounds: .zero,
+                        hitPID: 42, focusedPID: 42, foregroundPID: 42))
+    }
     func testReverseDragAndBoundaryClamp() {
         let rect = SelectionGeometry.selection(from: CGPoint(x: 90, y: 80), to: CGPoint(x: -20, y: -10),
                                                in: CGRect(x: 0, y: 0, width: 100, height: 100))
