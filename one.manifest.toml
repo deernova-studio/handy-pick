@@ -1,9 +1,9 @@
 version = 2
 
 [workspace]
-id = "quick-snap"
-name = "Quick Snap"
+id = "handy-pick"
+name = "HandyPick"
 
-[projects.quick-snap]
-path = "apps/quick-snap"
+[projects.handy-pick]
+path = "apps/handy-pick"
 toolchain = "swift"

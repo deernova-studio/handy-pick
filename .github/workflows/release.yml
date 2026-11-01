@@ -43,7 +43,7 @@ jobs:
       - name: 检查分支、仓库与版本冲突
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 apps/quick-snap/Scripts/github_release.py preflight
+        run: python3 apps/handy-pick/Scripts/github_release.py preflight
       - name: 检查共享凭据授权配置
         env:
           INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
@@ -84,7 +84,7 @@ jobs:
       - name: 检查 One 任务配置是否同步
         run: one init mise --dry-run -o json | python3 -c 'import json,sys; p=json.load(sys.stdin); sys.exit("Run one init mise and commit mise.toml" if p["changes"] else 0)'
       - name: 测试与编译
-        run: one run quick-snap:check --ui stream
+        run: one run handy-pick:check --ui stream
       - name: 从 One 的共享凭据库获取签名材料
         uses: Infisical/secrets-action@8a06c1bdcd5b8635d510c52d4b57a92c1ccef785 # v1.0.9
         with:
@@ -99,15 +99,15 @@ jobs:
           recursive: 'false'
           export-type: env
       - name: 临时钥匙串签名、公证与清理
-        run: one run quick-snap:release:ci --ui stream
+        run: one run handy-pick:release:ci --ui stream
       - name: 保存已公证的安装包
         id: artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: macos-release-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            apps/quick-snap/build/releases/HandyPick-${{ inputs.version }}-build${{ inputs.build_number }}/*.dmg
-            apps/quick-snap/build/releases/HandyPick-${{ inputs.version }}-build${{ inputs.build_number }}/SHA256SUMS.txt
+            apps/handy-pick/build/releases/HandyPick-${{ inputs.version }}-build${{ inputs.build_number }}/*.dmg
+            apps/handy-pick/build/releases/HandyPick-${{ inputs.version }}-build${{ inputs.build_number }}/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7
 
@@ -130,4 +130,4 @@ jobs:
       - name: 校验文件并发布
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 apps/quick-snap/Scripts/github_release.py publish build/github-release
+        run: python3 apps/handy-pick/Scripts/github_release.py publish build/github-release

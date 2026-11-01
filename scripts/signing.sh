@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-cd "$(dirname "$0")/../apps/quick-snap"
+cd "$(dirname "$0")/../apps/handy-pick"
 case "${1:-}" in
   sign) set -- bash Scripts/package.sh --release ;;
   notarize) set -- bash Scripts/notarize-current.sh ;;

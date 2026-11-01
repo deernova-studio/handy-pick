@@ -18,13 +18,13 @@
 
 快捷键监听只检查物理键码与修饰键标志，不记录键入内容。双击复制时，通过辅助功能读取当前指针所在文字区域的显式选区，并放入本机剪贴板；不记录或上传内容，不读取密码框。绑定配置保存在本机 UserDefaults。
 
-划词复制要求目标应用提供辅助功能选区；未提供选区的应用暂不能自动识别，仍可使用 ⌘C，然后双击粘贴。此版本将选中文字复制为纯文本；粘贴使用系统 ⌘V，支持的图片、富文本等类型由目标应用决定。内部 Bundle ID、偏好设置域和 One 任务名仍保留 quick-snap，正式签名身份不变。
+划词复制要求目标应用提供辅助功能选区；未提供选区的应用暂不能自动识别，仍可使用 ⌘C，然后双击粘贴。此版本将选中文字复制为纯文本；粘贴使用系统 ⌘V，支持的图片、富文本等类型由目标应用决定。内部 Bundle ID 和偏好设置域仍保留 studio.deernova.quick-snap，正式签名身份不变；One 任务统一使用 handy-pick 名称。
 
-构建产物在 `apps/quick-snap/build/HandyPick.app`；当前本机安装在 `/Applications/HandyPick.app`，重建后须更新安装副本。
+构建产物在 `apps/handy-pick/build/HandyPick.app`；当前本机安装在 `/Applications/HandyPick.app`，重建后须更新安装副本。
 
 ## 构建
 
-macOS 14+、Xcode / Swift 5.9+，没有第三方 Swift 依赖。应用位于 `apps/quick-snap`，工作区由 One CLI 管理。
+macOS 14+、Xcode / Swift 5.9+，没有第三方 Swift 依赖。应用位于 `apps/handy-pick`，工作区由 One CLI 管理。
 
 本地使用 One 的开发版：先在包含 Swift 支持的 **One CLI 源码仓库**中，使用已有的 One 命令执行仓库提供的安装任务：
 
@@ -44,29 +44,29 @@ one mise install
 云端 runner 不共享本机安装。CI 使用 `scripts/bootstrap-one.sh` 从固定上游提交 `bc73b921d85e1896044167c0be96a2b8936edf54` 构建 One，并校验源码 SHA-256；这是 CI 的准备步骤，本地无需重复运行。正式版 v0.1.24 尚不支持 Swift，需使用包含该功能的开发版或后续正式版。
 
 ```sh
-one run quick-snap:check  # 发布脚本测试、Swift 测试与 Release 编译
-one run quick-snap:build # 生成开发 .app
-one run quick-snap:dev   # 构建并前台运行，停止任务即可退出
-one run quick-snap:pack  # 生成本地未公证 DMG
+one run handy-pick:check  # 发布脚本测试、Swift 测试与 Release 编译
+one run handy-pick:build # 生成开发 .app
+one run handy-pick:dev   # 构建并前台运行，停止任务即可退出
+one run handy-pick:pack  # 生成本地未公证 DMG
 ```
 
-`dev` 前先退出已运行的 HandyPick，避免两份实例同时监听鼠标。开发任务不会替换 `/Applications` 中的安装副本。修改 `apps/quick-snap/Taskfile.yml` 后运行 `one init mise`，不要直接维护生成的任务配置。
+`dev` 前先退出已运行的 HandyPick，避免两份实例同时监听鼠标。开发任务不会替换 `/Applications` 中的安装副本。修改 `apps/handy-pick/Taskfile.yml` 后运行 `one init mise`，不要直接维护生成的任务配置。
 
-本地 DMG 位于 `apps/quick-snap/build/distribution-dev/HandyPick-local.dmg`，仅供本机验证；正式签名公证使用发布流程。
+本地 DMG 位于 `apps/handy-pick/build/distribution-dev/HandyPick-local.dmg`，仅供本机验证；正式签名公证使用发布流程。
 
-用 Xcode 打开 `apps/quick-snap/Package.swift` 可编辑源码。脚本生成可双击运行的 `.app`，默认本机 ad-hoc 签名。可通过环境变量 `QUICK_SNAP_SIGN_IDENTITY` 指定已有的 Apple Development 签名身份。重新构建后如果系统撤销权限，需要重新授权；权限应授予 `.app`，而不是命令行 Swift 进程。
+用 Xcode 打开 `apps/handy-pick/Package.swift` 可编辑源码。脚本生成可双击运行的 `.app`，默认本机 ad-hoc 签名。可通过环境变量 `QUICK_SNAP_SIGN_IDENTITY` 指定已有的 Apple Development 签名身份。重新构建后如果系统撤销权限，需要重新授权；权限应授予 `.app`，而不是命令行 Swift 进程。
 
 建议持续使用同一个 Apple Development 身份构建。切换签名身份（包括切回 ad-hoc）可能使 macOS 要求重新授予权限。
 
 ## 签名 DMG 与发布
 
-签名材料保存在 One 的共享凭据库；首次在本机终端运行 `one run quick-snap:signing-setup` 导入，之后用 `one run quick-snap:signing-check` 验证、`one run quick-snap:release` 签名公证。换 Mac 后登录同一账户和组织即可取用，不必重复导入 P12。证书过期或撤销时需在中心位置更新。
+签名材料保存在 One 的共享凭据库；首次在本机终端运行 `one run handy-pick:signing-setup` 导入，之后用 `one run handy-pick:signing-check` 验证、`one run handy-pick:release` 签名公证。换 Mac 后登录同一账户和组织即可取用，不必重复导入 P12。证书过期或撤销时需在中心位置更新。
 
 发布使用 Developer ID、强化运行时和 Apple 公证，生成 Apple 芯片版 DMG。GitHub 发布仅手动触发，CI 的独立授权需按[配置和发布说明](docs/github-actions.md)完成后使用。
 
 ## 图标
 
-采用用户选定的黑白叠卡片图案，以掀起的边角表达取用与传递。`apps/quick-snap/Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `apps/quick-snap/Sources/QuickSnap/MenuBarIcon.swift` 绘制的 22×18 点画布、20×16 点白色圆角小底（底块尺寸不变，仅内部叠卡片图形居中缩小至 80%）；沿用应用图标的倾斜叠卡片与掀角轮廓，简化后的图形以透明 alpha 镂空，透出菜单栏底色。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `apps/quick-snap/Resources/IconPrompt.txt`。运行 `zsh apps/quick-snap/Scripts/build-icons.sh` 可重新生成不同尺寸资源。
+采用用户选定的黑白叠卡片图案，以掀起的边角表达取用与传递。`apps/handy-pick/Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `apps/handy-pick/Sources/QuickSnap/MenuBarIcon.swift` 绘制的 22×18 点画布、20×16 点白色圆角小底（底块尺寸不变，仅内部叠卡片图形居中缩小至 80%）；沿用应用图标的倾斜叠卡片与掀角轮廓，简化后的图形以透明 alpha 镂空，透出菜单栏底色。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `apps/handy-pick/Resources/IconPrompt.txt`。运行 `zsh apps/handy-pick/Scripts/build-icons.sh` 可重新生成不同尺寸资源。
 
 ## 行为与边界
 

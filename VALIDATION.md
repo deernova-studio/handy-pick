@@ -1,5 +1,11 @@
 # 验证记录
 
+## 2026-11-01 handy-pick 仓库与工作区更名
+
+- 本地根目录改为 /Users/srx/projects/handy-pick，应用目录改为 apps/handy-pick；GitHub 改为 deernova-studio/handy-pick，保留私有状态、仓库 ID 与 v0.3.5 的已发布附件。
+- 更新 Git origin、One 工作区／项目名称、任务命令、签名包装器、CI 路径、文档链接和更名后的 GitHub OIDC subject。应用 Bundle ID、偏好设置域、签名身份及已安装应用保持不变。
+- 新路径下 one run handy-pick:check 的 24 项 Swift、26 项 Python 测试与 arm64 Release 编译全部通过；生成任务配置无漂移。迁移前 Swift 缓存保留于忽略的 build/swift-cache-before-rename。
+
 ## 2026-11-01 HandyPick 0.3.5 build 21
 
 - 复制反馈回到鼠标右下方，改为 96×32 点的系统磨砂胶囊、绿色细勾号、12 点文字和轻描边；适配系统明暗外观，保持 0.9 秒消失、点击穿透、不抢焦点与屏幕边缘约束。
@@ -39,9 +45,9 @@
 
 ## 2026-11-01 One CLI 正式签名 DMG 实测
 
-- `one run quick-snap:check --ui stream`：23 项 Swift 测试与 25 项 Python 测试、Release 编译通过；补充搜索列表清理回归后，签名相关 12 项 Python 测试全部通过。
+- `one run handy-pick:check --ui stream`：23 项 Swift 测试与 25 项 Python 测试、Release 编译通过；补充搜索列表清理回归后，签名相关 12 项 Python 测试全部通过。
 - 修复 macOS codesign 无法直接使用搜索列表外临时钥匙串的问题：构建时加入，结束时移除；按规范化路径匹配，并保留同时加入的其他钥匙串。不修改默认钥匙串。
-- `one run quick-snap:release --ui stream` 成功生成 `apps/quick-snap/build/releases/QuickSnap-0.2.1-build15/QuickSnap-0.2.1-macOS-arm64.dmg`，大小 1,854,379 字节。
+- `one run handy-pick:release --ui stream` 成功生成 `apps/handy-pick/build/releases/QuickSnap-0.2.1-build15/QuickSnap-0.2.1-macOS-arm64.dmg`，大小 1,854,379 字节。
 - 应用和 DMG 均采用 Developer ID Application（团队 LVWWAF3DBK）签名；Apple 公证均为 Accepted，公证票据附加及验证、Gatekeeper、磁盘镜像完整性检查全部通过。最终文件签名、公证票据和 SHA-256 校验再次通过。
 - 退出后用户钥匙串列表仅保留原 login.keychain-db，临时签名目录为零。未替换已安装应用，未上传 GitHub Release。
 
@@ -63,11 +69,11 @@
 
 ## 2026-11-01 One CLI 接入
 
-- 应用整体迁移到 `apps/quick-snap`，保留 SwiftPM；原有 Sources、Tests、Resources 文件逐字节一致，Bundle ID 仍为 `studio.deernova.quick-snap`。
+- 应用整体迁移到 `apps/handy-pick`，保留 SwiftPM；原有 Sources、Tests、Resources 文件逐字节一致，Bundle ID 仍为 `studio.deernova.quick-snap`。
 - 新增 One manifest、项目 Taskfile，通过 `one init mise` 生成工作区任务；再次 dry-run 无配置漂移。
 - One 固定为上游已合并提交 `bc73b921d85e1896044167c0be96a2b8936edf54`，源码归档 SHA-256 校验后本地编译。v0.1.24 正式包未包含 Swift 模板。
-- `one run quick-snap:check --ui stream` 通过：14 项 Python 发布脚本测试、23 项 Swift 核心测试、arm64 Release 编译。
-- `one run quick-snap:build --ui stream` 与 `one run quick-snap:pack --ui stream` 通过；应用严格签名校验、菜单栏属性、Bundle ID、arm64 架构与本地 DMG 完整性验证通过。
+- `one run handy-pick:check --ui stream` 通过：14 项 Python 发布脚本测试、23 项 Swift 核心测试、arm64 Release 编译。
+- `one run handy-pick:build --ui stream` 与 `one run handy-pick:pack --ui stream` 通过；应用严格签名校验、菜单栏属性、Bundle ID、arm64 架构与本地 DMG 完整性验证通过。
 - 发布工作流更新应用路径，并复用 One 的 check/sign/notarize 任务；actionlint v1.7.7 校验通过。脚本语法与 git diff 空白检查通过。
 - 本次未替换 `/Applications/Quick Snap.app`，未启动新 GUI 实例或重新申请权限。正式 Developer ID 签名、Apple 公证及云端发布仍待凭据就绪后验证。
 - 下方历史记录中的根目录 `Scripts`、`Sources`、`Resources` 等路径均指迁移前的位置。

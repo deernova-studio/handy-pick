@@ -9,10 +9,10 @@ scripts stay together here. The bundle identifier is `studio.deernova.quick-snap
 From the workspace root / 在仓库根目录运行：
 
 ```sh
-one run quick-snap:check
-one run quick-snap:build
-one run quick-snap:dev
-one run quick-snap:pack
+one run handy-pick:check
+one run handy-pick:build
+one run handy-pick:dev
+one run handy-pick:pack
 ```
 
 After editing Taskfile.yml, run `one init mise` at the workspace root.
