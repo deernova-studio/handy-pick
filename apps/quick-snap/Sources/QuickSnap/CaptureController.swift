@@ -112,9 +112,6 @@ final class SelectionView: NSView {
             (text as NSString).draw(at: CGPoint(x: selection.minX+6, y: max(6, selection.minY-26)),
                 withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 14, weight: .medium), .foregroundColor: NSColor.white])
         }
-        let hint = "拖动框选 · 松开复制 · Esc / 右键取消"
-        (hint as NSString).draw(at: CGPoint(x: 24, y: 24),
-            withAttributes: [.font: NSFont.systemFont(ofSize: 15, weight: .medium), .foregroundColor: NSColor.white])
     }
     override func mouseDown(with event: NSEvent) {
         window?.makeKey(); window?.makeFirstResponder(self)

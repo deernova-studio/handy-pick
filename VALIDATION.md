@@ -1,5 +1,12 @@
 # 验证记录
 
+## 2026-11-01 HandyPick 0.3.1 build 17
+
+- 文字复制、截图复制与菜单中的复制最近截图共用「✓ 已复制」短暂反馈；在指针附近显示 0.9 秒，不激活、不接收鼠标点击，并限制在当前屏幕可见区域内。开始截图前主动隐藏反馈。
+- 移除截图遮罩左上角的操作文字，保留选区尺寸。
+- One release 的 arm64 Release 编译、应用及 DMG 的 Developer ID 签名、Apple 公证、附票及 Gatekeeper 验证通过，最终 DMG SHA-256 校验通过。
+- 已更新 /Applications/HandyPick.app 为 0.3.1，保留 0.3.0 安装备份。重启后单实例事件监听已启用。反馈视觉及消失时机仍需实体鼠标使用时确认。
+
 ## 2026-11-01 HandyPick 0.3.0 build 16
 
 - 应用显示名称改为 HandyPick，沿用 studio.deernova.quick-snap 的 Bundle ID、设置域、可执行文件名和 Developer ID 团队。原安装保留在 build/previous-installed-0.2.1.app，新版已安装到 /Applications/HandyPick.app，单实例事件监听已启用，未重新申请权限。

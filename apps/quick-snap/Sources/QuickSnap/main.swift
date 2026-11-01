@@ -9,6 +9,7 @@ import OSLog
     private lazy var shortcutPanel = ShortcutPanel(editor: panel)
     private let trigger = ShortcutTrigger()
     private let capture = CaptureController()
+    private let copyFeedback = CopyFeedback()
     private var recentImage: NSImage?
     private var preparing = false
     private var message = ""
@@ -126,6 +127,7 @@ import OSLog
     private func beginCapture() {
         guard !capture.active, !preparing else { return }
         guard CGPreflightScreenCaptureAccess() else { inform("请先授予屏幕录制权限"); return }
+        copyFeedback.hide()
         shortcutPanel.dismiss(); preparing = true; trigger.suspended = true
         Task {
             defer { preparing = false }
@@ -165,6 +167,7 @@ import OSLog
                 if NSPasteboard.general.setString(text, forType: .string) {
                     self.recordGestureOutcome("selected-text-copied")
                     self.inform("已复制选中文字")
+                    self.copyFeedback.show()
                 } else { self.inform("复制失败，请重试") }
                 return
             case .unavailable:
@@ -196,8 +199,10 @@ import OSLog
     @objc private func copyRecent() {
         guard let recentImage, let cg = recentImage.cgImage(forProposedRect: nil, context: nil, hints: nil),
               let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) else { return }
-        NSPasteboard.general.clearContents(); NSPasteboard.general.setData(png, forType: .png)
+        NSPasteboard.general.clearContents()
+        guard NSPasteboard.general.setData(png, forType: .png) else { inform("复制失败，请重试"); return }
         if let tiff = recentImage.tiffRepresentation { NSPasteboard.general.setData(tiff, forType: .tiff) }
+        copyFeedback.show()
     }
     private func paste(to pid: Int32) {
         guard AXIsProcessTrusted(), pid > 0,
