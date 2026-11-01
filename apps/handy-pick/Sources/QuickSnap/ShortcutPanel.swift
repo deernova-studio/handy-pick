@@ -34,6 +34,11 @@ final class ShortcutPanel: NSPanel {
         setContentSize(editor.preferredContentSize)
     }
 
+    func resize(to size: NSSize) {
+        let top = frame.maxY
+        setFrame(NSRect(x: frame.minX, y: top-size.height, width: size.width, height: size.height), display: true, animate: false)
+    }
+
     func show(below button: NSStatusBarButton) {
         guard let window = button.window else { return }
         anchorRect = window.convertToScreen(button.convert(button.bounds, to: nil))

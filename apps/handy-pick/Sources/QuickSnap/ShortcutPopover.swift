@@ -8,6 +8,9 @@ final class ShortcutPopover: NSViewController {
     var onSelect: ((UUID) -> Void)?
     var onRemove: ((UUID) -> Void)?
     var onClear: (() -> Void)?
+    var onSizeChange: ((NSSize) -> Void)?
+    private let scroll = NSScrollView()
+    private let separator = PaperlightSurface()
     private let bindingButton = PaperlightButton(title: "", target: nil, action: nil)
     private let grid = FlippedHistoryView()
     private var needsPermission = false
@@ -26,9 +29,9 @@ final class ShortcutPopover: NSViewController {
         bindingButton.setAccessibilityLabel("设置双击快捷键")
         bindingButton.toolTip = "点击后按新键，Esc 取消"
         root.addSubview(bindingButton)
-        let separator = PaperlightSurface(frame: NSRect(x: 16, y: 55, width: 368, height: Paperlight.hairline(root)))
+        separator.frame = NSRect(x: 16, y: 55, width: 368, height: Paperlight.hairline(root))
         separator.fill = Paperlight.line; root.addSubview(separator)
-        let scroll = NSScrollView(frame: NSRect(x: 16, y: 64, width: 368, height: 312))
+        scroll.frame = NSRect(x: 16, y: 64, width: 368, height: 312)
         scroll.scrollerStyle = .overlay
         scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
         scroll.documentView = grid; root.addSubview(scroll)
@@ -47,19 +50,13 @@ final class ShortcutPopover: NSViewController {
         loadViewIfNeeded()
         grid.subviews.forEach { $0.removeFromSuperview() }
         grid.frame = NSRect(x: 0, y: 0, width: 368, height: max(312, CGFloat((entries.count + 2) / 3) * 120))
-        if entries.isEmpty {
-            let icon = NSImageView(frame: NSRect(x: 170, y: 84, width: 28, height: 28))
-            icon.image = NSImage(systemSymbolName: "clipboard", accessibilityDescription: nil)?
-                .withSymbolConfiguration(.init(pointSize: 28, weight: .light))
-            icon.contentTintColor = Paperlight.tertiary; grid.addSubview(icon)
-            let empty = NSTextField(labelWithString: "暂无记录")
-            empty.textColor = Paperlight.ink; empty.font = Paperlight.serif(22)
-            empty.alignment = .center; empty.frame = NSRect(x: 0, y: 128, width: 368, height: 28)
-            grid.addSubview(empty)
-            let hint = NSTextField(labelWithString: "复制图片或文字，它会出现在这里。")
-            hint.textColor = Paperlight.secondary; hint.font = Paperlight.body
-            hint.alignment = .center; hint.frame = NSRect(x: 0, y: 164, width: 368, height: 20)
-            grid.addSubview(hint)
+        scroll.isHidden = entries.isEmpty
+        separator.isHidden = entries.isEmpty
+        let size = NSSize(width: 400, height: entries.isEmpty ? 56 : 392)
+        if preferredContentSize != size {
+            preferredContentSize = size
+            onSizeChange?(size)
+            view.setFrameSize(size)
         }
         for (index, entry) in entries.enumerated() {
             let tile = HistoryTile(entry: entry)

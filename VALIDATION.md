@@ -1,5 +1,11 @@
 # 验证记录
 
+## 2026-11-01 HandyPick 0.4.2 build 24
+
+- 按用户反馈移除无剪贴板记录时的图标、标题、说明和占位区域。空记录时面板仅保留 56pt 设置行，有记录时恢复网格；清空或删除最后一条时收起，保持面板顶部位置不变。
+- One check 的 34 项 Swift、26 项 Python 测试和 Release 编译通过；原有面板测试补充空／有内容切换验证，检查空状态渲染只有设置行。
+- One release 签名、公证、附票与 Gatekeeper 检查通过；已安装启动 0.4.2，单实例快捷键监听启用，旧版保留于 build/previous-installed-0.4.1.app。未上传 GitHub Release。
+
 ## 2026-11-01 HandyPick 0.4.1 build 23 — Paperlight
 
 - 依据用户提供的 Paperlight v2 token、Card、GlassControls、Button、EmptyState 规范统一菜单栏面板、剪贴板卡片、标注工具条和复制反馈。保留品牌图标、无箭头面板、双击操作和截图定位修复。

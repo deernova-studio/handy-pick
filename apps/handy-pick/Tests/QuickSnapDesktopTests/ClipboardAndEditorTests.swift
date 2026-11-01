@@ -78,12 +78,15 @@ final class ClipboardAndEditorTests: XCTestCase {
         let panel = ShortcutPopover(); panel.loadViewIfNeeded()
         panel.view.appearance = NSAppearance(named: .aqua)
         panel.update(binding: "鼠标中键", recording: false, needsPermission: false)
+        XCTAssertEqual(panel.preferredContentSize.height, 56)
         var history = ClipboardHistory()
         let data = NSBitmapImageRep(cgImage: fixture()).representation(using: .png, properties: [:])!
         for text in ["A tiny helper for everyday ideas.", "把灵感随手收好。", "HandyPick", "⌘ C → 双击 → 粘贴", "A longer note with enough text to wrap across several lines in the card."] { history.insert(.text(text)) }
         history.insert(.image(data, type: NSPasteboard.PasteboardType.png.rawValue))
         panel.updateHistory(history.entries)
         let scroll = panel.view.subviews.compactMap { $0 as? NSScrollView }.first!
+        XCTAssertFalse(scroll.isHidden)
+        XCTAssertEqual(panel.preferredContentSize.height, 392)
         XCTAssertEqual(scroll.documentView?.subviews.count, 6)
         var selected: UUID?
         panel.onSelect = { selected = $0 }
@@ -93,6 +96,9 @@ final class ClipboardAndEditorTests: XCTestCase {
         panel.view.appearance = NSAppearance(named: .darkAqua)
         savePreview(panel.view, "clipboard-panel-dark.png")
         panel.updateHistory([])
+        XCTAssertTrue(scroll.isHidden)
+        XCTAssertEqual(scroll.documentView?.subviews.count, 0)
+        XCTAssertEqual(panel.preferredContentSize.height, 56)
         savePreview(panel.view, "clipboard-empty-dark.png")
     }
     private func fixture() -> CGImage {

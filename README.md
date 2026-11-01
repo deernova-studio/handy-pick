@@ -66,7 +66,7 @@ one run handy-pick:pack  # 生成本地未公证 DMG
 
 ## 界面风格
 
-界面采用用户提供的 Paperlight v2 设计语言。中性黑白灰语义颜色集中在 `Sources/QuickSnap/Paperlight.swift`，原始 token 快照保留于 `design/paperlight.tokens.json`。剪贴板使用不透明纸面、无阴影卡片、8pt 圆角、13pt 正文和细描边；首行为快捷键设置，空状态使用衬线标题。悬停、选中和键盘焦点靠明暗和描边区分。
+界面采用用户提供的 Paperlight v2 设计语言。中性黑白灰语义颜色集中在 `Sources/QuickSnap/Paperlight.swift`，原始 token 快照保留于 `design/paperlight.tokens.json`。剪贴板使用不透明纸面、无阴影卡片、8pt 圆角、13pt 正文和细描边；首行为快捷键设置，没有记录时只显示设置行，不显示空状态或占位区域。悬停、选中和键盘焦点靠明暗和描边区分。
 
 macOS 26 的标注工具条与指针旁复制反馈使用原生 `NSGlassEffectView`；确认操作为黑白主按钮，成功提示使用 Paperlight 的青绿状态色。图片和标注属于内容，保留原颜色。现有 macOS 14/15 支持保留，使用系统材质回退；降低透明度时改用不透明纸面，跟随系统浅色和深色外观。菜单栏品牌图标和双击交互保持原样。
 

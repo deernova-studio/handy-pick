@@ -45,6 +45,7 @@ import OSLog
             self?.trigger.cancelRecording(); self?.refresh()
         }
         shortcutPanel.isRecording = { [weak self] in self?.trigger.recording ?? false }
+        panel.onSizeChange = { [weak self] size in self?.shortcutPanel.resize(to: size) }
         clipboard.onChange = { [weak self] entries in self?.panel.updateHistory(entries) }
         panel.onSelect = { [weak self] id in
             guard let self else { return }
