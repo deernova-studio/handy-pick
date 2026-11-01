@@ -86,7 +86,7 @@ final class ClipboardAndEditorTests: XCTestCase {
         panel.updateHistory(history.entries)
         let scroll = panel.view.subviews.compactMap { $0 as? NSScrollView }.first!
         XCTAssertFalse(scroll.isHidden)
-        XCTAssertEqual(panel.preferredContentSize, NSSize(width: 360, height: 392))
+        XCTAssertEqual(panel.preferredContentSize, NSSize(width: 360, height: 312))
         XCTAssertEqual(scroll.documentView?.subviews.count, 6)
         var selected: UUID?
         panel.onSelect = { selected = $0 }
@@ -95,6 +95,17 @@ final class ClipboardAndEditorTests: XCTestCase {
         savePreview(panel.view, "clipboard-panel.png")
         panel.view.appearance = NSAppearance(named: .darkAqua)
         savePreview(panel.view, "clipboard-panel-dark.png")
+        for index in 7...10 { history.insert(.text("History fixture \(index)")) }
+        for (count, height) in [(1, 192), (3, 192), (4, 312), (6, 312), (7, 432), (9, 432), (10, 432)] {
+            panel.updateHistory(Array(history.entries.prefix(count)))
+            XCTAssertEqual(panel.preferredContentSize.height, CGFloat(height))
+            XCTAssertEqual(scroll.hasVerticalScroller, count > 9)
+        }
+        XCTAssertGreaterThan(scroll.documentView!.frame.height, scroll.contentSize.height)
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 120))
+        panel.updateHistory(Array(history.entries.prefix(1)))
+        XCTAssertEqual(scroll.contentView.bounds.origin.y, 0)
+        savePreview(panel.view, "clipboard-one-row.png")
         panel.updateHistory([])
         XCTAssertTrue(scroll.isHidden)
         XCTAssertEqual(scroll.documentView?.subviews.count, 0)

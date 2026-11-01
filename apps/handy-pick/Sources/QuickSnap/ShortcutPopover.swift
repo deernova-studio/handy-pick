@@ -49,10 +49,18 @@ final class ShortcutPopover: NSViewController {
     func updateHistory(_ entries: [ClipboardHistory.Entry]) {
         loadViewIfNeeded()
         grid.subviews.forEach { $0.removeFromSuperview() }
-        grid.frame = NSRect(x: 0, y: 0, width: 328, height: max(312, CGFloat((entries.count + 2) / 3) * 120))
+        let rows = (entries.count + 2) / 3
+        let contentHeight = max(0, CGFloat(rows) * 120 - 8)
+        let visibleHeight = max(0, CGFloat(min(rows, 3)) * 120 - 8)
+        let previousOrigin = scroll.contentView.bounds.origin
+        scroll.setFrameSize(NSSize(width: 328, height: visibleHeight))
+        grid.frame = NSRect(x: 0, y: 0, width: 328, height: contentHeight)
+        scroll.hasVerticalScroller = rows > 3
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: min(max(0, previousOrigin.y), max(0, contentHeight-visibleHeight))))
+        scroll.reflectScrolledClipView(scroll.contentView)
         scroll.isHidden = entries.isEmpty
         separator.isHidden = entries.isEmpty
-        let size = NSSize(width: entries.isEmpty ? 240 : 360, height: entries.isEmpty ? 56 : 392)
+        let size = NSSize(width: entries.isEmpty ? 240 : 360, height: entries.isEmpty ? 56 : 64 + visibleHeight + 16)
         bindingButton.setFrameOrigin(NSPoint(x: size.width - 176, y: 16))
         if preferredContentSize != size {
             preferredContentSize = size
