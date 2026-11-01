@@ -66,7 +66,7 @@ one run quick-snap:pack  # 生成本地未公证 DMG
 
 ## 图标
 
-采用用户选定的黑白叠卡片图案，以掀起的边角表达取用与传递。`apps/quick-snap/Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `apps/quick-snap/Sources/QuickSnap/MenuBarIcon.swift` 绘制的 22×18 点画布、约 16×13 点可见白色圆角小底（整体居中缩小至 80%，保留点击区域）；沿用应用图标的倾斜叠卡片与掀角轮廓，简化后的图形以透明 alpha 镂空，透出菜单栏底色。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `apps/quick-snap/Resources/IconPrompt.txt`。运行 `zsh apps/quick-snap/Scripts/build-icons.sh` 可重新生成不同尺寸资源。
+采用用户选定的黑白叠卡片图案，以掀起的边角表达取用与传递。`apps/quick-snap/Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `apps/quick-snap/Sources/QuickSnap/MenuBarIcon.swift` 绘制的 22×18 点画布、20×16 点白色圆角小底（底块尺寸不变，仅内部叠卡片图形居中缩小至 80%）；沿用应用图标的倾斜叠卡片与掀角轮廓，简化后的图形以透明 alpha 镂空，透出菜单栏底色。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `apps/quick-snap/Resources/IconPrompt.txt`。运行 `zsh apps/quick-snap/Scripts/build-icons.sh` 可重新生成不同尺寸资源。
 
 ## 行为与边界
 

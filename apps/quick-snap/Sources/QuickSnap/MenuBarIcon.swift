@@ -14,15 +14,13 @@ enum MenuBarIcon {
             bitmap.size = size
             let context = NSGraphicsContext(bitmapImageRep: bitmap)!
             NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = context
-            // Keep the click target while reducing the visual weight of the white badge.
-            context.cgContext.translateBy(x: size.width / 2, y: size.height / 2)
-            context.cgContext.scaleBy(x: 0.8, y: 0.8)
-            context.cgContext.translateBy(x: -size.width / 2, y: -size.height / 2)
             NSColor.white.setFill()
             NSBezierPath(roundedRect: NSRect(x: 1, y: 1, width: 20, height: 16),
                          xRadius: 4, yRadius: 4).fill()
             context.cgContext.setBlendMode(.clear)
             context.cgContext.translateBy(x: 11, y: 9)
+            // Keep the badge unchanged; add breathing room only around its cutout.
+            context.cgContext.scaleBy(x: 0.8, y: 0.8)
             context.cgContext.rotate(by: .pi / 15)
             context.cgContext.translateBy(x: -11, y: -9)
             drawMark()
