@@ -44,22 +44,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 apps/quick-snap/Scripts/github_release.py preflight
-      - name: 检查签名配置是否齐全
+      - name: 检查共享凭据授权配置
         env:
-          HAS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 != '' }}
-          HAS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD != '' }}
-          HAS_NOTARY_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
-          APPLE_ID: ${{ vars.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
+          INFISICAL_PROJECT_SLUG: ${{ vars.INFISICAL_PROJECT_SLUG }}
         run: |
-          if [[ "$HAS_CERTIFICATE" != true || "$HAS_CERTIFICATE_PASSWORD" != true || "$HAS_NOTARY_PASSWORD" != true || -z "$APPLE_ID" || ! "$APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]; then
-            echo '::error::请先按 docs/github-actions.md 配置 3 个 Secrets 和 2 个 Variables。'
+          if [[ -z "$INFISICAL_IDENTITY_ID" || -z "$INFISICAL_PROJECT_SLUG" ]]; then
+            echo '::error::请按 docs/github-actions.md 配置 Infisical OIDC 授权和两个仓库 Variables。'
             exit 1
           fi
 
   build:
     name: Apple Silicon 打包、签名与公证
     needs: prepare
+    permissions:
+      contents: read
+      id-token: write
     runs-on: macos-15
     timeout-minutes: 75
     outputs:
@@ -85,21 +85,21 @@ jobs:
         run: one init mise --dry-run -o json | python3 -c 'import json,sys; p=json.load(sys.stdin); sys.exit("Run one init mise and commit mise.toml" if p["changes"] else 0)'
       - name: 测试与编译
         run: one run quick-snap:check --ui stream
-      - name: 安装临时签名身份与公证授权
-        env:
-          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_ID: ${{ vars.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
-        run: bash apps/quick-snap/Scripts/ci-signing.sh install
-      - name: 打包并签名
-        run: one run quick-snap:sign --ui stream
-      - name: Apple 公证与 DMG 验证
-        run: one run quick-snap:notarize --ui stream
-      - name: 清理签名钥匙串
-        if: always()
-        run: bash apps/quick-snap/Scripts/ci-signing.sh cleanup
+      - name: 从 One 的共享凭据库获取签名材料
+        uses: Infisical/secrets-action@8a06c1bdcd5b8635d510c52d4b57a92c1ccef785 # v1.0.9
+        with:
+          method: oidc
+          oidc-audience: one-macos-signing
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          domain: ${{ vars.INFISICAL_SITE_URL || 'https://app.infisical.com' }}
+          env-slug: prod
+          secret-path: /apple/macos
+          include-imports: 'false'
+          recursive: 'false'
+          export-type: env
+      - name: 临时钥匙串签名、公证与清理
+        run: one run quick-snap:release:ci --ui stream
       - name: 保存已公证的安装包
         id: artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

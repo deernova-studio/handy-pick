@@ -1,5 +1,14 @@
 # 验证记录
 
+## 2026-11-01 One 共享签名接入（凭据配置中）
+
+- 本机 One 已登录官方 Infisical，并初始化 shared-credentials。准备使用 prod 的 /apple/macos；用户尚在确认 P12 导出密码，未宣称证书私钥与公证密码已上传或通过真实验证。
+- 签名任务通过 `one exec --global --keys` 获取五项凭据；新增隐藏输入导入向导、临时钥匙串包装器和签名验证任务。凭据通过 stdin 写入 One；生成物不保存 P12 或原始密码。
+- 9 项新测试覆盖导入失败、公证授权失败、身份不匹配、缺失配置、退出码、终止清理、stdin 上传及日志不含原始密码；原有 14 项 Python 测试和 23 项 Swift 测试继续通过。
+- 实际创建并删除空临时钥匙串验证：默认用户钥匙串搜索列表不变。导入向导在真实 PTY 中到达确认提示并取消，没有输入或上传凭据。
+- Apple 官方公开 Developer ID G2 中间证书 SHA-256 与用户提供的公开副本一致，随脚本导入临时钥匙串；没有修改系统信任设置。
+- CI 已编写同源 Infisical OIDC 取用配置，但当前账户自定义 RBAC 受套餐限制。未授予 CI 整个共享库的读取权限，未创建机器身份或填写 GitHub Variables；云端链路未验证。
+
 ## 2026-11-01 One CLI 接入
 
 - 应用整体迁移到 `apps/quick-snap`，保留 SwiftPM；原有 Sources、Tests、Resources 文件逐字节一致，Bundle ID 仍为 `studio.deernova.quick-snap`。

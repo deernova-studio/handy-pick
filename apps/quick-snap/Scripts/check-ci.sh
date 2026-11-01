@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-bash -n ../../scripts/bootstrap-one.sh
+bash -n ../../scripts/bootstrap-one.sh ../../scripts/signing.sh
 for script in Scripts/*.sh; do
   if [[ "$script" == Scripts/build.sh || "$script" == Scripts/build-icons.sh ]]; then
     zsh -n "$script"
@@ -10,6 +10,7 @@ for script in Scripts/*.sh; do
   fi
 done
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s Scripts/tests -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ../../scripts/tests -v
 xcrun swift test
 xcrun swift build --triple arm64-apple-macosx14.0 -c release --product QuickSnap
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then

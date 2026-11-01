@@ -17,6 +17,7 @@ tasks:
     desc: Run Swift and release-script tests / 运行 Swift 与发布脚本测试
     cmds:
       - env PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s Scripts/tests -v
+      - env PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ../../scripts/tests -v
       - xcrun swift test
   pack:
     desc: Build a local unsigned DMG / 构建本地未公证 DMG
@@ -26,13 +27,25 @@ tasks:
   sign:
     desc: Build a Developer ID release candidate / 构建 Developer ID 发布候选
     cmds:
-      - bash Scripts/package.sh --release
+      - bash ../../scripts/signing.sh sign
   notarize:
     desc: Notarize the release candidate and DMG / 公证发布候选与 DMG
     cmds:
-      - bash Scripts/notarize-current.sh
+      - bash ../../scripts/signing.sh notarize
   release:
     desc: Sign and notarize without publishing / 签名并公证，不上传发布
     cmds:
-      - task: sign
-      - task: notarize
+      - bash ../../scripts/signing.sh release
+  signing-check:
+    desc: Verify One shared signing credentials / 验证 One 共享签名凭据
+    cmds:
+      - bash ../../scripts/signing.sh verify
+  signing-setup:
+    desc: Import credentials into One once / 一次性导入 One 共享签名凭据
+    interactive: true
+    cmds:
+      - python3 ../../scripts/setup_signing.py
+  release:ci:
+    desc: Release using CI-injected shared credentials / 使用 CI 注入的共享凭据发布
+    cmds:
+      - python3 ../../scripts/macos_signing.py -- bash Scripts/release.sh

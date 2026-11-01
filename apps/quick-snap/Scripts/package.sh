@@ -59,7 +59,9 @@ cp Resources/Info.plist "$STAGED_APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set CFBundleVersion $BUILD_NUMBER" "$STAGED_APP/Contents/Info.plist"
 plutil -lint "$STAGED_APP/Contents/Info.plist"
 if "$RELEASE"; then
-  codesign --force --sign "$SIGNING_IDENTITY" --options runtime --timestamp "$STAGED_APP"
+  KEYCHAIN_ARGS=()
+  if [ -n "${SIGNING_KEYCHAIN:-}" ]; then KEYCHAIN_ARGS=(--keychain "$SIGNING_KEYCHAIN"); fi
+  codesign --force --sign "$SIGNING_IDENTITY" "${KEYCHAIN_ARGS[@]}" --options runtime --timestamp "$STAGED_APP"
 else
   codesign --force --sign - "$STAGED_APP"
 fi

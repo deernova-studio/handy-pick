@@ -91,7 +91,9 @@ if [ ! -f "$DMG" ]; then
   ditto "$APP" "$STAGING/volume/Quick Snap.app"
   ln -s /Applications "$STAGING/volume/Applications"
   hdiutil create -volname 'Quick Snap' -srcfolder "$STAGING/volume" -format UDZO "$STAGING/$DMG_NAME"
-  codesign --sign "$IDENTITY" --timestamp "$STAGING/$DMG_NAME"
+  KEYCHAIN_ARGS=()
+  if [ -n "${SIGNING_KEYCHAIN:-}" ]; then KEYCHAIN_ARGS=(--keychain "$SIGNING_KEYCHAIN"); fi
+  codesign --sign "$IDENTITY" "${KEYCHAIN_ARGS[@]}" --timestamp "$STAGING/$DMG_NAME"
   codesign --verify --strict --verbose=2 "$STAGING/$DMG_NAME"
   mv "$STAGING/$DMG_NAME" "$DMG"
 fi

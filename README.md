@@ -58,7 +58,9 @@ one run quick-snap:pack  # 生成本地未公证 DMG
 
 ## 签名 DMG 与发布
 
-发布流程参考 linse，使用 Developer ID、强化运行时和 Apple 公证，生成 Apple 芯片版 DMG，上传到私有 Release。仅手动触发，详见[配置和发布说明](docs/github-actions.md)。现有本机开发构建入口继续保留。
+签名材料保存在 One 的共享凭据库；首次在本机终端运行 `one run quick-snap:signing-setup` 导入，之后用 `one run quick-snap:signing-check` 验证、`one run quick-snap:release` 签名公证。换 Mac 后登录同一账户和组织即可取用，不必重复导入 P12。证书过期或撤销时需在中心位置更新。
+
+发布使用 Developer ID、强化运行时和 Apple 公证，生成 Apple 芯片版 DMG。GitHub 发布仅手动触发，CI 的独立授权需按[配置和发布说明](docs/github-actions.md)完成后使用。
 
 ## 图标
 
