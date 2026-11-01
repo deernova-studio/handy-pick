@@ -17,26 +17,18 @@ import AppKit
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         panel.animationBehavior = .none
 
-        let background = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 96, height: 32))
-        background.material = .popover
-        background.blendingMode = .behindWindow
-        background.state = .active
-        background.wantsLayer = true
-        background.layer?.cornerRadius = 16
-        background.layer?.borderWidth = 0.5
-        background.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
-        background.layer?.masksToBounds = true
-        let symbol = NSImageView(frame: NSRect(x: 14, y: 10, width: 12, height: 12))
-        symbol.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 12, weight: .medium))
-        symbol.contentTintColor = .systemGreen
-        background.addSubview(symbol)
+        let background = PaperlightGlass(frame: NSRect(x: 0, y: 0, width: 96, height: 32), radius: 16)
+        let symbol = NSImageView(frame: NSRect(x: 12, y: 9, width: 14, height: 14))
+        symbol.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 14, weight: .medium))
+        symbol.contentTintColor = Paperlight.success
+        background.content.addSubview(symbol)
         let label = NSTextField(labelWithString: "已复制")
-        label.font = .systemFont(ofSize: 12, weight: .medium)
-        label.textColor = .labelColor
+        label.font = Paperlight.label
+        label.textColor = Paperlight.ink
         label.alignment = .left
         label.frame = NSRect(x: 34, y: 9, width: 48, height: 16)
-        background.addSubview(label)
+        background.content.addSubview(label)
         panel.contentView = background
     }
 

@@ -8,26 +8,28 @@ final class ShortcutPopover: NSViewController {
     var onSelect: ((UUID) -> Void)?
     var onRemove: ((UUID) -> Void)?
     var onClear: (() -> Void)?
-    private let bindingButton = NSButton(title: "", target: nil, action: nil)
+    private let bindingButton = PaperlightButton(title: "", target: nil, action: nil)
     private let grid = FlippedHistoryView()
     private var needsPermission = false
 
     override func loadView() {
-        let root = FlippedHistoryView(frame: NSRect(x: 0, y: 0, width: 360, height: 354))
+        let root = PaperlightSurface(frame: NSRect(x: 0, y: 0, width: 400, height: 392))
         let caption = NSTextField(labelWithString: "设置")
-        caption.frame = NSRect(x: 16, y: 19, width: 50, height: 18)
-        caption.font = .systemFont(ofSize: 13, weight: .medium)
+        caption.frame = NSRect(x: 16, y: 18, width: 50, height: 18)
+        caption.font = Paperlight.label; caption.textColor = Paperlight.ink
         root.addSubview(caption)
-        bindingButton.frame = NSRect(x: 125, y: 12, width: 219, height: 30)
+        bindingButton.frame = NSRect(x: 184, y: 16, width: 200, height: 24)
         bindingButton.target = self; bindingButton.action = #selector(record)
-        bindingButton.font = .systemFont(ofSize: 12)
+        bindingButton.font = Paperlight.label
+        bindingButton.style = .secondary; bindingButton.isBordered = false
         bindingButton.bezelStyle = .rounded
         bindingButton.setAccessibilityLabel("设置双击快捷键")
         bindingButton.toolTip = "点击后按新键，Esc 取消"
         root.addSubview(bindingButton)
-        let separator = NSBox(frame: NSRect(x: 12, y: 54, width: 336, height: 1))
-        separator.boxType = .separator; root.addSubview(separator)
-        let scroll = NSScrollView(frame: NSRect(x: 8, y: 64, width: 344, height: 282))
+        let separator = PaperlightSurface(frame: NSRect(x: 16, y: 55, width: 368, height: Paperlight.hairline(root)))
+        separator.fill = Paperlight.line; root.addSubview(separator)
+        let scroll = NSScrollView(frame: NSRect(x: 16, y: 64, width: 368, height: 312))
+        scroll.scrollerStyle = .overlay
         scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
         scroll.documentView = grid; root.addSubview(scroll)
         let menu = NSMenu()
@@ -44,16 +46,25 @@ final class ShortcutPopover: NSViewController {
     func updateHistory(_ entries: [ClipboardHistory.Entry]) {
         loadViewIfNeeded()
         grid.subviews.forEach { $0.removeFromSuperview() }
-        grid.frame = NSRect(x: 0, y: 0, width: 328, height: max(276, CGFloat((entries.count + 2) / 3) * 102))
+        grid.frame = NSRect(x: 0, y: 0, width: 368, height: max(312, CGFloat((entries.count + 2) / 3) * 120))
         if entries.isEmpty {
+            let icon = NSImageView(frame: NSRect(x: 170, y: 84, width: 28, height: 28))
+            icon.image = NSImage(systemSymbolName: "clipboard", accessibilityDescription: nil)?
+                .withSymbolConfiguration(.init(pointSize: 28, weight: .light))
+            icon.contentTintColor = Paperlight.tertiary; grid.addSubview(icon)
             let empty = NSTextField(labelWithString: "暂无记录")
-            empty.textColor = .tertiaryLabelColor; empty.font = .systemFont(ofSize: 13)
-            empty.alignment = .center; empty.frame = NSRect(x: 0, y: 112, width: 328, height: 24)
+            empty.textColor = Paperlight.ink; empty.font = Paperlight.serif(22)
+            empty.alignment = .center; empty.frame = NSRect(x: 0, y: 128, width: 368, height: 28)
             grid.addSubview(empty)
+            let hint = NSTextField(labelWithString: "复制图片或文字，它会出现在这里。")
+            hint.textColor = Paperlight.secondary; hint.font = Paperlight.body
+            hint.alignment = .center; hint.frame = NSRect(x: 0, y: 164, width: 368, height: 20)
+            grid.addSubview(hint)
         }
         for (index, entry) in entries.enumerated() {
             let tile = HistoryTile(entry: entry)
-            tile.frame = NSRect(x: CGFloat(index % 3) * 110 + 2, y: CGFloat(index / 3) * 102 + 2, width: 104, height: 94)
+            let width: CGFloat = 117.333333
+            tile.frame = NSRect(x: CGFloat(index % 3) * (width + 8), y: CGFloat(index / 3) * 120, width: width, height: 112)
             tile.onSelect = { [weak self] in self?.onSelect?(entry.id) }
             tile.onRemove = { [weak self] in self?.onRemove?(entry.id) }
             tile.onClear = { [weak self] in self?.onClear?() }
@@ -66,7 +77,7 @@ final class ShortcutPopover: NSViewController {
 
 private final class FlippedHistoryView: NSView { override var isFlipped: Bool { true } }
 
-private final class HistoryTile: NSButton {
+private final class HistoryTile: PaperlightButton {
     var onSelect: (() -> Void)?
     var onRemove: (() -> Void)?
     var onClear: (() -> Void)?
@@ -74,13 +85,13 @@ private final class HistoryTile: NSButton {
     private var preview: NSImage?
     init(entry: ClipboardHistory.Entry) {
         self.entry = entry; super.init(frame: .zero)
-        isBordered = false; title = ""; target = self; action = #selector(choose)
+        isBordered = false; focusRingType = .none; title = ""; target = self; action = #selector(choose)
         if case .image(let data, _) = entry.content {
             // Downsample for thumbnails without keeping a full decoded image per tile.
             if let source = CGImageSourceCreateWithData(data as CFData, nil),
                let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                  kCGImageSourceCreateThumbnailFromImageAlways: true,
-                 kCGImageSourceThumbnailMaxPixelSize: 208,
+                 kCGImageSourceThumbnailMaxPixelSize: 240,
                  kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary) {
                 preview = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
             }
@@ -94,20 +105,32 @@ private final class HistoryTile: NSButton {
     }
     required init?(coder: NSCoder) { fatalError("Not supported") }
     override func draw(_ dirtyRect: NSRect) {
-        let card = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 9, yRadius: 9)
-        (isHighlighted ? NSColor.controlAccentColor.withAlphaComponent(0.18) : NSColor.controlBackgroundColor.withAlphaComponent(0.65)).setFill(); card.fill()
-        NSColor.separatorColor.withAlphaComponent(0.45).setStroke(); card.lineWidth = 0.5; card.stroke()
-        let inset = bounds.insetBy(dx: 10, dy: 10)
-        if let preview {
-            let scale = min(inset.width / preview.size.width, inset.height / preview.size.height)
-            let size = NSSize(width: preview.size.width * scale, height: preview.size.height * scale)
-            preview.draw(in: NSRect(x: bounds.midX-size.width/2, y: bounds.midY-size.height/2, width: size.width, height: size.height))
+        let card = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 8, yRadius: 8)
+        Paperlight.surface.setFill(); card.fill()
+        if isHighlighted { Paperlight.selected.setFill(); card.fill() }
+        (isHighlighted ? Paperlight.ink : (hovered ? Paperlight.controlLine : Paperlight.line)).setStroke()
+        card.lineWidth = isHighlighted ? 1 : Paperlight.hairline(self); card.stroke()
+        if window?.firstResponder === self { Paperlight.ink.setStroke(); card.lineWidth = 2; card.stroke() }
+        let contentRect = NSRect(x: 12, y: 32, width: bounds.width-24, height: bounds.height-44)
+        let metadata: String
+        if case .image = entry.content {
+            metadata = "图片"
+            if let preview {
+                let scale = min(contentRect.width / preview.size.width, contentRect.height / preview.size.height)
+                let size = NSSize(width: preview.size.width * scale, height: preview.size.height * scale)
+                preview.draw(in: NSRect(x: contentRect.midX-size.width/2, y: contentRect.midY-size.height/2, width: size.width, height: size.height))
+            }
         } else if case .text(let text) = entry.content {
+            metadata = "文字"
             let paragraph = NSMutableParagraphStyle(); paragraph.lineBreakMode = .byWordWrapping
-            (String(text.prefix(300)) as NSString).draw(with: inset, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: [
-                .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.labelColor, .paragraphStyle: paragraph])
-        }
+            paragraph.minimumLineHeight = 18; paragraph.maximumLineHeight = 18
+            (String(text.prefix(300)) as NSString).draw(with: contentRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: [
+                .font: Paperlight.body, .foregroundColor: Paperlight.ink, .paragraphStyle: paragraph])
+        } else { metadata = "" }
+        (metadata as NSString).draw(at: NSPoint(x: 12, y: 12), withAttributes: [
+            .font: Paperlight.caption, .foregroundColor: Paperlight.tertiary])
     }
+
     @objc private func choose() { onSelect?() }
     @objc private func removeEntry() { onRemove?() }
     @objc private func clearEntries() { onClear?() }

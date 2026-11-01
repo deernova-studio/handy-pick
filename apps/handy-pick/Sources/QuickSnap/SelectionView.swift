@@ -10,7 +10,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
     private var tool: Annotation.Kind = .line
     private var annotations: [Annotation] = []
     private var draft: Annotation?
-    private var toolbar: NSVisualEffectView?
+    private var toolbar: PaperlightGlass?
     private var toolButtons: [NSButton] = []
     private var textField: NSTextField?
     private var textOrigin: CGPoint = .zero
@@ -78,23 +78,22 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         CGPoint(x: min(max(point.x, selection.minX), selection.maxX), y: min(max(point.y, selection.minY), selection.maxY))
     }
     private func showToolbar() {
-        let width: CGFloat = 280, height: CGFloat = 44
+        let width: CGFloat = 264, height: CGFloat = 44
         var y = selection.maxY + 10
         if y + height > bounds.maxY - 8 { y = selection.minY - height - 10 }
         y = min(max(8, y), bounds.maxY-height-8)
         let x = min(max(8, selection.maxX-width), bounds.maxX-width-8)
-        let bar = NSVisualEffectView(frame: NSRect(x: x, y: y, width: width, height: height))
-        bar.material = .hudWindow; bar.blendingMode = .withinWindow; bar.state = .active
-        bar.wantsLayer = true; bar.layer?.cornerRadius = 12; bar.layer?.masksToBounds = true
+        let bar = PaperlightGlass(frame: NSRect(x: x, y: y, width: width, height: height), radius: 22)
         let symbols = ["line.diagonal", "circle", "textformat", "arrow.uturn.backward", "xmark", "checkmark"]
         let labels = ["划线", "画圈", "文字", "撤销", "取消", "复制截图"]
         for index in symbols.indices {
-            let button = NSButton(image: NSImage(systemSymbolName: symbols[index], accessibilityDescription: labels[index])!, target: self, action: #selector(toolbarClicked(_:)))
-            button.frame = NSRect(x: 8 + CGFloat(index)*44, y: 7, width: 40, height: 30)
-            button.tag = index; button.bezelStyle = .texturedRounded; button.toolTip = labels[index]
+            let button = PaperlightButton(image: NSImage(systemSymbolName: symbols[index], accessibilityDescription: labels[index])!, target: self, action: #selector(toolbarClicked(_:)))
+            button.frame = NSRect(x: 8 + CGFloat(index)*42, y: 4, width: 36, height: 36)
+            button.tag = index; button.isBordered = false; button.cornerRadius = 18; button.toolTip = labels[index]
             button.setAccessibilityLabel(labels[index]); button.setButtonType(index < 3 ? .toggle : .momentaryPushIn)
-            button.contentTintColor = index == 5 ? .systemGreen : .labelColor
-            bar.addSubview(button); toolButtons.append(button)
+            button.style = index == 5 ? .primary : .plain
+            button.isOnGlass = true
+            bar.content.addSubview(button); toolButtons.append(button)
         }
         toolButtons[0].state = .on
         addSubview(bar); toolbar = bar; window?.invalidateCursorRects(for: self)
@@ -116,7 +115,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         let field = NSTextField(frame: NSRect(x: point.x, y: point.y, width: min(320, selection.maxX-point.x), height: min(30, selection.maxY-point.y)))
         guard field.frame.width >= 30, field.frame.height >= 20 else { return }
         field.font = .systemFont(ofSize: 20, weight: .semibold); field.textColor = .systemRed
-        field.backgroundColor = .textBackgroundColor.withAlphaComponent(0.9)
+        field.backgroundColor = Paperlight.raised
         field.focusRingType = .none; field.delegate = self; field.placeholderString = "文字"
         addSubview(field); textField = field; window?.makeFirstResponder(field)
     }

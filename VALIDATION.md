@@ -1,5 +1,14 @@
 # 验证记录
 
+## 2026-11-01 HandyPick 0.4.1 build 23 — Paperlight
+
+- 依据用户提供的 Paperlight v2 token、Card、GlassControls、Button、EmptyState 规范统一菜单栏面板、剪贴板卡片、标注工具条和复制反馈。保留品牌图标、无箭头面板、双击操作和截图定位修复。
+- 引入集中管理的语义颜色和字体；内容使用不透明纸面、细描边、8pt 卡片圆角、13pt 正文，设置位于首行。卡片支持悬停描边和键盘焦点，空状态采用衬线标题，跟随系统浅色和深色主题。
+- macOS 26 使用 NSGlassEffectView 承载操作工具条和复制提示；主操作黑白高对比，成功反馈使用规范青绿色。降低透明度时使用实色纸面；保留 macOS 14/15 的系统材质回退。剪贴板图片和截图标注颜色不变。
+- One check：34 项 Swift、26 项 Python 测试及 arm64 Release 编译通过。渲染检查浅色／深色卡片、空状态及操作按钮；原生预览窗口确认系统玻璃上的六个按钮可见，划线／画圈切换正常，取消可退出。普通离屏位图不能完整捕获系统玻璃层，因此使用真实窗口补充检查。
+- One release 完成应用与 DMG 的 Developer ID 签名、Apple 公证、附票和 Gatekeeper 验证。已更新 /Applications/HandyPick.app 为 0.4.1 build 23，旧版保留于 build/previous-installed-0.4.0.app；单实例快捷键监听启用。
+- 本次 DMG：apps/handy-pick/build/releases/HandyPick-0.4.1-build23/HandyPick-0.4.1-macOS-arm64.dmg。仅本地提交，未上传新的 GitHub Release。
+
 ## 2026-11-01 HandyPick 0.4.0 build 22
 
 - 截图保留桌面窗口阴影；全屏遮罩禁用窗口动画和工作区边界约束，所有屏幕先准备绘制再显示。用户使用实体鼠标确认进入截图已不抖动。

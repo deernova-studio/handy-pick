@@ -48,9 +48,11 @@ final class ClipboardAndEditorTests: XCTestCase {
         view.mouseDown(with: mouse(.leftMouseDown, x: 80, y: 380))
         view.mouseUp(with: mouse(.leftMouseUp, x: 600, y: 120))
         XCTAssertNil(result)
-        let bar = view.subviews.compactMap { $0 as? NSVisualEffectView }.first!
-        let buttons = bar.subviews.compactMap { $0 as? NSButton }
+        let bar = view.subviews.compactMap { $0 as? PaperlightGlass }.first!
+        let buttons = bar.content.subviews.compactMap { $0 as? NSButton }
         XCTAssertEqual(buttons.count, 6)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(bar.content.frame.size, bar.bounds.size)
         view.mouseDown(with: mouse(.leftMouseDown, x: 150, y: 250))
         view.mouseDragged(with: mouse(.leftMouseDragged, x: 400, y: 250))
         view.mouseUp(with: mouse(.leftMouseUp, x: 400, y: 250))
@@ -62,7 +64,12 @@ final class ClipboardAndEditorTests: XCTestCase {
         view.subviews.compactMap { $0 as? NSTextField }.first!.stringValue = "标注示例"
         // Switching tools commits the active text edit before export.
         buttons.first { $0.tag == 0 }!.performClick(nil)
+        view.appearance = NSAppearance(named: .aqua)
         savePreview(view, "annotation-editor.png")
+        savePreview(bar.content, "annotation-controls.png")
+        view.appearance = NSAppearance(named: .darkAqua)
+        savePreview(view, "annotation-editor-dark.png")
+        savePreview(bar.content, "annotation-controls-dark.png")
         buttons.first { $0.tag == 5 }!.performClick(nil)
         XCTAssertEqual(result?.width, 520); XCTAssertEqual(result?.height, 260)
     }
@@ -70,7 +77,6 @@ final class ClipboardAndEditorTests: XCTestCase {
         _ = NSApplication.shared
         let panel = ShortcutPopover(); panel.loadViewIfNeeded()
         panel.view.appearance = NSAppearance(named: .aqua)
-        panel.view.wantsLayer = true; panel.view.layer?.backgroundColor = NSColor(calibratedWhite: 0.96, alpha: 1).cgColor
         panel.update(binding: "鼠标中键", recording: false, needsPermission: false)
         var history = ClipboardHistory()
         let data = NSBitmapImageRep(cgImage: fixture()).representation(using: .png, properties: [:])!
@@ -84,6 +90,10 @@ final class ClipboardAndEditorTests: XCTestCase {
         (scroll.documentView!.subviews.first as! NSButton).performClick(nil)
         XCTAssertEqual(selected, history.entries[0].id)
         savePreview(panel.view, "clipboard-panel.png")
+        panel.view.appearance = NSAppearance(named: .darkAqua)
+        savePreview(panel.view, "clipboard-panel-dark.png")
+        panel.updateHistory([])
+        savePreview(panel.view, "clipboard-empty-dark.png")
     }
     private func fixture() -> CGImage {
         let c = CGContext(data: nil, width: 720, height: 480, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!

@@ -1,0 +1,142 @@
+{
+  "name": "Paperlight",
+  "version": 2,
+  "color": {
+    "themes": [
+      { "id": "light", "name": "Light" },
+      { "id": "dark", "name": "Dark" }
+    ],
+    "tokens": [
+      { "name": "canvas", "value": { "light": "#f5f5f5", "dark": "#161616" }, "usage": "窗口底色、iOS 分组列表的底色。最底层的纸面。" },
+      { "name": "surface", "value": { "light": "#fafafa", "dark": "#1c1c1c" }, "usage": "内容区、卡片。比 canvas 略亮一层。" },
+      { "name": "surface-raised", "value": { "light": "#ffffff", "dark": "#252525" }, "usage": "输入框、Composer、iOS 分组列表、弹出层。最亮的纸面。" },
+      { "name": "surface-sunken", "value": { "light": "#ebebeb", "dark": "#111111" }, "usage": "代码块、用户消息气泡、展开的步骤详情。凹下去的纸面。" },
+      { "name": "ink", "value": { "light": "#171717", "dark": "#ededed" }, "usage": "正文与标题，用在四种纸面上（最低 13:1）。" },
+      { "name": "ink-secondary", "value": { "light": "#525252", "dark": "#a3a3a3" }, "usage": "次要文字、说明、列表的值、未选中图标，用在四种纸面上（最低 6:1）。" },
+      { "name": "ink-tertiary", "value": { "light": "#666666", "dark": "#8c8c8c" }, "usage": "占位符、时间戳、计数、分组标题，用在四种纸面上（最低 4.5:1）。" },
+      { "name": "line", "value": { "light": "#e3e3e3", "dark": "#2f2f2f" }, "usage": "分隔线、卡片描边、按钮描边。装饰性，不承载信息。" },
+      { "name": "line-control", "value": { "light": "#8a8a8a", "dark": "#737373" }, "usage": "输入框边框、拖拽条。在 canvas、surface、surface-raised 上不低于 3:1，让人一眼看出可输入。" },
+      { "name": "accent", "value": "{ink}", "usage": "强调：主按钮填充、选中指示、焦点环。就是墨色本身，浅色主题为黑、深色主题为白；强调靠明暗对比，不靠彩色。" },
+      { "name": "accent-soft", "value": { "light": "#e8e8e8", "dark": "#2e2e2e" }, "usage": "强调的浅底：强调标签、列表图标底、输入框聚焦光晕。上面的文字用 ink。" },
+      { "name": "on-accent", "value": { "light": "#ffffff", "dark": "#161616" }, "usage": "accent 填充上的文字和图标：浅色主题白字，深色主题黑字。" },
+      { "name": "focus-ring", "value": "{accent}", "usage": "键盘焦点环：2pt 实线，外偏移 2pt。在所有纸面上不低于 13:1。" },
+      { "name": "success", "value": { "light": "#1f6b66", "dark": "#6cc3b4" }, "usage": "成功、已完成、已同步。界面里只有状态色是彩色，只在表达状态时出现。作为文字用在纸面和 success-soft 上。" },
+      { "name": "success-soft", "value": { "light": "#ddeeec", "dark": "#183230" }, "usage": "成功状态的浅底（标签、横幅）。" },
+      { "name": "warning", "value": { "light": "#8a5a0b", "dark": "#e2b054" }, "usage": "需要注意但不阻断：额度将用完、网络较慢。作为文字用在纸面和 warning-soft 上。" },
+      { "name": "warning-soft", "value": { "light": "#f5ead3", "dark": "#3a2e17" }, "usage": "警告状态的浅底。" },
+      { "name": "danger", "value": { "light": "#b0283f", "dark": "#f07a8a" }, "usage": "错误、失败、删除。永远同时配图标或文字。作为文字用在纸面和 danger-soft 上。" },
+      { "name": "danger-soft", "value": { "light": "#f7e1e4", "dark": "#3d2027" }, "usage": "错误状态的浅底、危险按钮的底色。" },
+      { "name": "info", "value": { "light": "#2c5f86", "dark": "#82b4dc" }, "usage": "中性提示。作为文字用在纸面和 info-soft 上。" },
+      { "name": "info-soft", "value": { "light": "#e1ebf3", "dark": "#1d2c3a" }, "usage": "提示状态的浅底。" },
+      { "name": "fill-hover", "value": { "light": "#0000000a", "dark": "#ffffff0f" }, "usage": "悬停底色，叠在任何纸面上（列表行、文字按钮、侧边栏项）。" },
+      { "name": "fill-selected", "value": { "light": "#00000012", "dark": "#ffffff1a" }, "usage": "选中底色（侧边栏当前项、分段控件底槽、中性标签底）。" },
+      { "name": "knob", "value": { "light": "#ffffff", "dark": "#ffffff" }, "usage": "开关的圆钮，两套主题都是白色，与系统一致。" },
+      { "name": "scrim", "value": { "light": "#00000052", "dark": "#00000080" }, "usage": "弹窗背后压暗内容的遮罩。" },
+      { "name": "glass-fill", "value": { "light": "#ffffffa6", "dark": "#2a2a2aa6" }, "usage": "仅用于网页预览模拟 Liquid Glass。App 里用系统 .glassEffect()，不要用这个值自己画玻璃。" },
+      { "name": "glass-stroke", "value": { "light": "#ffffffcc", "dark": "#ffffff24" }, "usage": "仅用于网页预览：玻璃边缘的高光描边。" }
+    ]
+  },
+  "type": {
+    "fonts": [],
+    "families": {
+      "serif": "ui-serif, \"New York\", \"Iowan Old Style\", Georgia, \"PingFang SC\", serif",
+      "sans": "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"PingFang SC\", \"Hiragino Sans GB\", system-ui, sans-serif",
+      "mono": "ui-monospace, \"SF Mono\", Menlo, \"PingFang SC\", monospace"
+    },
+    "groups": [
+      {
+        "name": "macOS",
+        "family": "sans",
+        "note": "Mac 正文 13pt，行高收紧到约 1.4 倍。衬线只用于标题和长文阅读，界面文字一律无衬线。",
+        "styles": [
+          { "name": "mac-display", "family": "serif", "fontSize": "22px", "lineHeight": "28px", "fontWeight": 600, "letterSpacing": "-0.01em", "sample": "还没有笔记", "usage": "空状态、引导页的大标题。每屏最多一个。SwiftUI: .system(size: 22, weight: .semibold, design: .serif)" },
+          { "name": "mac-title", "family": "serif", "fontSize": "17px", "lineHeight": "22px", "fontWeight": 600, "sample": "本周回顾", "usage": "文章标题、设置页标题。SwiftUI: .system(.title3, design: .serif).weight(.semibold)" },
+          { "name": "mac-headline", "fontSize": "13px", "lineHeight": "17px", "fontWeight": 600, "sample": "最近项目", "usage": "窗口标题、区块标题、横幅标题。SwiftUI: .headline" },
+          { "name": "mac-body", "fontSize": "13px", "lineHeight": "18px", "fontWeight": 400, "sample": "同步到 iCloud 后，所有设备上都能看到这条笔记。", "usage": "界面正文、按钮、列表、表单、用户消息。SwiftUI: .body" },
+          { "name": "mac-prose", "family": "serif", "fontSize": "14px", "lineHeight": "22px", "fontWeight": 400, "sample": "长文和 AI 的回答用衬线排，读起来更像一页纸，而不是一块界面。", "usage": "长文阅读、AI 回答。栏宽不超过 content-max。" },
+          { "name": "mac-callout", "fontSize": "12px", "lineHeight": "16px", "fontWeight": 400, "sample": "上次同步：今天 09:41", "usage": "表单说明、卡片摘要、次要信息。SwiftUI: .callout" },
+          { "name": "mac-caption", "fontSize": "11px", "lineHeight": "13px", "fontWeight": 500, "sample": "3 个文件 · 12 KB", "usage": "时间戳、计数、侧边栏分组标题、标签。SwiftUI: .caption" }
+        ]
+      },
+      {
+        "name": "iOS",
+        "family": "sans",
+        "note": "iOS 正文保持系统默认的 17pt，让动态字体正常缩放，只收紧行高和标题。",
+        "styles": [
+          { "name": "ios-large-title", "family": "serif", "fontSize": "30px", "lineHeight": "36px", "fontWeight": 600, "letterSpacing": "-0.01em", "sample": "笔记", "usage": "页面大标题。SwiftUI: .system(.largeTitle, design: .serif).weight(.semibold)" },
+          { "name": "ios-title", "family": "serif", "fontSize": "20px", "lineHeight": "25px", "fontWeight": 600, "sample": "本周回顾", "usage": "弹窗标题、文章标题、空状态标题。SwiftUI: .system(.title3, design: .serif)" },
+          { "name": "ios-headline", "fontSize": "17px", "lineHeight": "22px", "fontWeight": 600, "sample": "最近项目", "usage": "列表行标题、卡片标题、按钮。SwiftUI: .headline" },
+          { "name": "ios-body", "fontSize": "17px", "lineHeight": "23px", "fontWeight": 400, "sample": "同步到 iCloud 后，所有设备上都能看到这条笔记。", "usage": "界面正文、列表行。SwiftUI: .body" },
+          { "name": "ios-prose", "family": "serif", "fontSize": "17px", "lineHeight": "26px", "fontWeight": 400, "sample": "长文和 AI 的回答用衬线排，读起来更像一页纸。", "usage": "长文阅读、AI 回答。SwiftUI: .system(.body, design: .serif)，行距 .lineSpacing(4)" },
+          { "name": "ios-callout", "fontSize": "15px", "lineHeight": "20px", "fontWeight": 400, "sample": "上次同步：今天 09:41", "usage": "说明文字、弹窗正文、用户消息。SwiftUI: .callout" },
+          { "name": "ios-footnote", "fontSize": "13px", "lineHeight": "17px", "fontWeight": 400, "sample": "关闭后，新笔记只保存在这台设备上。", "usage": "分组列表的页头页脚、卡片摘要。SwiftUI: .footnote" },
+          { "name": "ios-caption", "fontSize": "12px", "lineHeight": "15px", "fontWeight": 500, "sample": "3 个文件 · 12 KB", "usage": "时间戳、计数、标签。SwiftUI: .caption" }
+        ]
+      },
+      {
+        "name": "Code",
+        "family": "mono",
+        "note": "代码、命令、文件路径、数据。",
+        "styles": [
+          { "name": "code-mac", "fontSize": "12px", "lineHeight": "17px", "fontWeight": 400, "sample": "let total = items.reduce(0, +)", "usage": "Mac 上的代码块、步骤摘要。SwiftUI: .system(.callout, design: .monospaced)" },
+          { "name": "code-ios", "fontSize": "13px", "lineHeight": "18px", "fontWeight": 400, "sample": "let total = items.reduce(0, +)", "usage": "iOS 上的代码块。SwiftUI: .system(.footnote, design: .monospaced)" }
+        ]
+      }
+    ]
+  },
+  "spacing": {
+    "note": "4pt 网格，整体偏紧凑。组与组之间的间距至少是组内间距的 2 倍。",
+    "tokens": [
+      { "name": "space-1", "value": "4px", "usage": "图标与文字之间、卡片内标题与摘要之间。" },
+      { "name": "space-2", "value": "8px", "usage": "Mac 列表项内边距、横幅上下内边距、Composer 内边距。" },
+      { "name": "space-3", "value": "12px", "usage": "Mac 按钮左右内边距、卡片内边距、横幅左右内边距。" },
+      { "name": "space-4", "value": "16px", "usage": "Mac 内容区边距、对话中消息之间、iOS 页面左右边距。" },
+      { "name": "space-5", "value": "20px", "usage": "iOS 分组之间、Mac 区块之间。" },
+      { "name": "space-6", "value": "24px", "usage": "空状态内边距、大区块之间。" },
+      { "name": "space-8", "value": "32px", "usage": "页面级留白。" },
+      { "name": "space-10", "value": "40px", "usage": "引导页、首屏的大留白。" }
+    ]
+  },
+  "radius": {
+    "note": "嵌套保持同心：内圆角 = 外圆角 − 内边距。",
+    "tokens": [
+      { "name": "radius-xs", "value": "4px", "usage": "标签、复选框、分段控件里的选中块（外层 radius-sm、内边距 2）。" },
+      { "name": "radius-sm", "value": "6px", "usage": "Mac 按钮、输入框、侧边栏选中块、iOS 列表图标底。" },
+      { "name": "radius-md", "value": "8px", "usage": "Mac 卡片、横幅、代码块、弹出菜单。" },
+      { "name": "radius-lg", "value": "12px", "usage": "iOS 卡片、iOS 分组列表、Composer、用户消息气泡、Mac 侧边栏面板。" },
+      { "name": "radius-xl", "value": "24px", "usage": "iOS 底部弹窗、iOS 单行 Composer。" },
+      { "name": "radius-full", "value": "999px", "usage": "胶囊与圆形：玻璃按钮、iOS 主按钮、发送按钮、状态圆点。" }
+    ]
+  },
+  "shadow": {
+    "note": "卡片不加阴影。只有真正浮起来的东西才有阴影。",
+    "tokens": [
+      { "name": "shadow-control", "value": { "light": "0 1px 1px rgba(0, 0, 0, 0.05)", "dark": "0 1px 1px rgba(0, 0, 0, 0.30)" }, "usage": "次按钮、分段控件的选中块：一点点厚度。" },
+      { "name": "shadow-float", "value": { "light": "0 1px 2px rgba(0, 0, 0, 0.05), 0 6px 20px rgba(0, 0, 0, 0.08)", "dark": "0 1px 2px rgba(0, 0, 0, 0.40), 0 6px 20px rgba(0, 0, 0, 0.45)" }, "usage": "Composer、弹出菜单、弹窗、浮动面板。" },
+      { "name": "shadow-glass", "value": { "light": "0 4px 14px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.70)", "dark": "0 4px 14px rgba(0, 0, 0, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.10)" }, "usage": "仅用于网页预览模拟玻璃。App 里系统玻璃自带阴影。" }
+    ]
+  },
+  "stroke": {
+    "note": "线宽。",
+    "tokens": [
+      { "name": "stroke-hairline", "value": "0.5px", "usage": "分隔线、卡片描边：1 个物理像素。SwiftUI: 1 / displayScale。" },
+      { "name": "stroke-control", "value": "1px", "usage": "输入框边框。" },
+      { "name": "stroke-focus", "value": "2px", "usage": "焦点环。" }
+    ]
+  },
+  "size": {
+    "note": "控件高度与布局尺寸。Mac 偏紧凑，iOS 遵守 44pt 最小点击区域。",
+    "tokens": [
+      { "name": "control-mac-sm", "value": "20px", "usage": "Mac 小按钮、行内操作、分段控件。" },
+      { "name": "control-mac", "value": "24px", "usage": "Mac 默认按钮、输入框、图标按钮、步骤行。" },
+      { "name": "control-mac-lg", "value": "28px", "usage": "Mac 大按钮（引导页、空状态）。" },
+      { "name": "row-mac", "value": "26px", "usage": "Mac 侧边栏项、列表行。" },
+      { "name": "control-ios", "value": "44px", "usage": "iOS 最小可点区域（按钮看起来可以更小，点击区域仍补足到 44）、列表行、输入框、导航栏玻璃按钮。" },
+      { "name": "button-ios-sm", "value": "30px", "usage": "iOS 小按钮的可见高度：卡片和列表里的「获取」「关注」这类行内操作。" },
+      { "name": "button-ios", "value": "36px", "usage": "iOS 默认按钮的可见高度。" },
+      { "name": "control-ios-lg", "value": "46px", "usage": "iOS 通栏主按钮（页面底部、弹窗里的唯一主操作）。" },
+      { "name": "sidebar-mac", "value": "220px", "usage": "Mac 侧边栏默认宽度。" },
+      { "name": "content-max", "value": "680px", "usage": "长文阅读栏的最大宽度，14pt 下约每行 45 个汉字。" }
+    ]
+  }
+}

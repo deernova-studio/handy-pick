@@ -23,9 +23,9 @@ final class ShortcutPanel: NSPanel {
         title = "HandyPick"
 
         editor.loadViewIfNeeded()
-        let background = NSVisualEffectView(frame: NSRect(origin: .zero, size: editor.preferredContentSize))
-        background.material = .popover; background.blendingMode = .behindWindow; background.state = .active
-        background.wantsLayer = true; background.layer?.cornerRadius = 10
+        let background = PaperlightSurface(frame: NSRect(origin: .zero, size: editor.preferredContentSize))
+        background.fill = Paperlight.canvas; background.radius = 12
+        background.wantsLayer = true; background.layer?.cornerRadius = 12
         background.layer?.masksToBounds = true
         editor.view.frame = background.bounds
         editor.view.autoresizingMask = [.width, .height]

@@ -64,6 +64,12 @@ one run handy-pick:pack  # 生成本地未公证 DMG
 
 发布使用 Developer ID、强化运行时和 Apple 公证，生成 Apple 芯片版 DMG。GitHub 发布仅手动触发，CI 的独立授权需按[配置和发布说明](docs/github-actions.md)完成后使用。
 
+## 界面风格
+
+界面采用用户提供的 Paperlight v2 设计语言。中性黑白灰语义颜色集中在 `Sources/QuickSnap/Paperlight.swift`，原始 token 快照保留于 `design/paperlight.tokens.json`。剪贴板使用不透明纸面、无阴影卡片、8pt 圆角、13pt 正文和细描边；首行为快捷键设置，空状态使用衬线标题。悬停、选中和键盘焦点靠明暗和描边区分。
+
+macOS 26 的标注工具条与指针旁复制反馈使用原生 `NSGlassEffectView`；确认操作为黑白主按钮，成功提示使用 Paperlight 的青绿状态色。图片和标注属于内容，保留原颜色。现有 macOS 14/15 支持保留，使用系统材质回退；降低透明度时改用不透明纸面，跟随系统浅色和深色外观。菜单栏品牌图标和双击交互保持原样。
+
 ## 图标
 
 采用用户选定的黑白叠卡片图案，以掀起的边角表达取用与传递。`apps/handy-pick/Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `apps/handy-pick/Sources/QuickSnap/MenuBarIcon.swift` 绘制的 22×18 点画布、20×16 点白色圆角小底（底块尺寸不变，仅内部叠卡片图形居中缩小至 80%）；沿用应用图标的倾斜叠卡片与掀角轮廓，简化后的图形以透明 alpha 镂空，透出菜单栏底色。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `apps/handy-pick/Resources/IconPrompt.txt`。运行 `zsh apps/handy-pick/Scripts/build-icons.sh` 可重新生成不同尺寸资源。
