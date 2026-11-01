@@ -15,7 +15,7 @@ final class TypingProtectionTests: XCTestCase {
         XCTAssertFalse(ShortcutBinding.modifier(54).needsTypingProtection)
     }
     func testEditorsAndUnknownFocusAlwaysKeepNormalInput() {
-        for role in [nil, "AXTextField", "AXTextArea", "AXComboBox", "AXWebArea", "AXGroup", "AXWindow", "CustomEditor"] {
+        for role in [nil, "AXTextField", "AXTextArea", "AXComboBox", "CustomEditor"] {
             XCTAssertFalse(TypingPolicy.canUseTypingKey(role: role, editable: nil, valueSettable: false, selectionSettable: false))
         }
         XCTAssertFalse(TypingPolicy.canUseTypingKey(role: "AXButton", editable: true, valueSettable: false, selectionSettable: false))
@@ -23,6 +23,15 @@ final class TypingProtectionTests: XCTestCase {
         XCTAssertFalse(TypingPolicy.canUseTypingKey(role: "AXTable", editable: nil, valueSettable: false, selectionSettable: true))
         XCTAssertTrue(TypingPolicy.canUseTypingKey(role: "AXButton", editable: nil, valueSettable: false, selectionSettable: false))
         XCTAssertTrue(TypingPolicy.canUseTypingKey(role: "AXOutline", editable: false, valueSettable: false, selectionSettable: false))
+    }
+    func testNonEditablePageBackgroundsAllowShortcutsButEditableContainersDoNot() {
+        for role in ["AXWebArea", "AXGroup", "AXScrollArea", "AXWindow"] {
+            XCTAssertTrue(TypingPolicy.canUseTypingKey(role: role, editable: nil, valueSettable: false, selectionSettable: false))
+            XCTAssertFalse(TypingPolicy.canUseTypingKey(role: role, editable: true, valueSettable: false, selectionSettable: false))
+            XCTAssertFalse(TypingPolicy.canUseTypingKey(role: role, editable: nil, valueSettable: true, selectionSettable: false))
+            XCTAssertFalse(TypingPolicy.canUseTypingKey(role: role, editable: nil, valueSettable: false, selectionSettable: true))
+            XCTAssertFalse(TypingPolicy.canUseTypingKey(role: role, editable: nil, valueSettable: nil, selectionSettable: false))
+        }
     }
     func testTypingKeyPassesDownRepeatAndUpEvenIfFocusChangesMidPress() {
         var gate = KeyPressGate()

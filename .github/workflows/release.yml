@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '新版本号，例如 0.4.6（不要填 v）'
+        description: '新版本号，例如 0.4.7（不要填 v）'
         type: string
         required: true
-        default: '0.4.6'
+        default: '0.4.7'
       build_number:
         description: '新构建号，例如 21'
         type: string
         required: true
-        default: '28'
+        default: '29'
       notes:
         description: '本次功能更新或问题修复（可选）'
         type: string

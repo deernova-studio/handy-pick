@@ -7,6 +7,13 @@ import QuickSnapCore
 enum TypingFocus {
     static func allowsShortcut(for pid: pid_t) -> Bool {
         guard pid > 0, NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return false }
+        let allowed = focusedControlAllowsShortcut(for: pid)
+        return allowed && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
+    }
+
+    /// Separate the AX reader from foreground routing so real control trees can be tested safely.
+    static func focusedControlAllowsShortcut(for pid: pid_t) -> Bool {
+        guard pid > 0 else { return false }
         let deadline = ProcessInfo.processInfo.systemUptime + 0.04
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.008)
@@ -35,6 +42,5 @@ enum TypingFocus {
         let allowed = TypingPolicy.canUseTypingKey(role: role, editable: items[2] as? Bool,
             valueSettable: settable(kAXValueAttribute), selectionSettable: settable(kAXSelectedTextAttribute))
         return allowed && ProcessInfo.processInfo.systemUptime < deadline
-            && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
     }
 }
