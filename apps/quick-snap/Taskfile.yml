@@ -1,0 +1,38 @@
+version: '3'
+
+tasks:
+  dev:
+    desc: Build and run Quick Snap / 构建并运行 Quick Snap
+    cmds:
+      - bash Scripts/dev.sh {{.CLI_ARGS}}
+  build:
+    desc: Build the development app / 构建开发应用
+    cmds:
+      - zsh Scripts/build.sh
+  check:
+    desc: Check scripts, test and compile / 检查脚本、测试并编译
+    cmds:
+      - bash Scripts/check-ci.sh
+  test:
+    desc: Run Swift and release-script tests / 运行 Swift 与发布脚本测试
+    cmds:
+      - env PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s Scripts/tests -v
+      - xcrun swift test
+  pack:
+    desc: Build a local unsigned DMG / 构建本地未公证 DMG
+    cmds:
+      - bash Scripts/package.sh --dev
+      - bash Scripts/pack.sh
+  sign:
+    desc: Build a Developer ID release candidate / 构建 Developer ID 发布候选
+    cmds:
+      - bash Scripts/package.sh --release
+  notarize:
+    desc: Notarize the release candidate and DMG / 公证发布候选与 DMG
+    cmds:
+      - bash Scripts/notarize-current.sh
+  release:
+    desc: Sign and notarize without publishing / 签名并公证，不上传发布
+    cmds:
+      - task: sign
+      - task: notarize

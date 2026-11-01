@@ -1,0 +1,9 @@
+version = 2
+
+[workspace]
+id = "quick-snap"
+name = "Quick Snap"
+
+[projects.quick-snap]
+path = "apps/quick-snap"
+toolchain = "swift"

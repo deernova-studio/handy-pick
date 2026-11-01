@@ -1,5 +1,16 @@
 # 验证记录
 
+## 2026-11-01 One CLI 接入
+
+- 应用整体迁移到 `apps/quick-snap`，保留 SwiftPM；原有 Sources、Tests、Resources 文件逐字节一致，Bundle ID 仍为 `studio.deernova.quick-snap`。
+- 新增 One manifest、项目 Taskfile，通过 `one init mise` 生成工作区任务；再次 dry-run 无配置漂移。
+- One 固定为上游已合并提交 `bc73b921d85e1896044167c0be96a2b8936edf54`，源码归档 SHA-256 校验后本地编译。v0.1.24 正式包未包含 Swift 模板。
+- `one run quick-snap:check --ui stream` 通过：14 项 Python 发布脚本测试、23 项 Swift 核心测试、arm64 Release 编译。
+- `one run quick-snap:build --ui stream` 与 `one run quick-snap:pack --ui stream` 通过；应用严格签名校验、菜单栏属性、Bundle ID、arm64 架构与本地 DMG 完整性验证通过。
+- 发布工作流更新应用路径，并复用 One 的 check/sign/notarize 任务；actionlint v1.7.7 校验通过。脚本语法与 git diff 空白检查通过。
+- 本次未替换 `/Applications/Quick Snap.app`，未启动新 GUI 实例或重新申请权限。正式 Developer ID 签名、Apple 公证及云端发布仍待凭据就绪后验证。
+- 下方历史记录中的根目录 `Scripts`、`Sources`、`Resources` 等路径均指迁移前的位置。
+
 ## 2026-11-01 发布流程
 
 - 参照同一组织 linse 的手动发布流程，增加 Developer ID 打包、临时 CI 钥匙串、应用及 DMG 公证/附票、Gatekeeper 检查、SHA-256 和草稿 Release 验证后发布。保留本机开发构建，不新增 push / PR 自动任务。

@@ -13,3 +13,6 @@ xcuserdata/
 *.key
 *.pem
 __pycache__/
+.cache/
+.mise/
+.one-run-*/

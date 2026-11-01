@@ -32,19 +32,24 @@
 ## 本机验证与打包
 
 ```sh
-bash Scripts/check-ci.sh
-bash Scripts/package.sh --dev
+one run quick-snap:check
+one run quick-snap:pack
 ```
 
-本机开发打包输出到 build/distribution-dev，不替换已安装的 Quick Snap，也不修改现有权限。
+先按仓库 README 安装固定版本 One CLI。CI 同样从固定提交构建 One，通过 `one run` 调用本地相同的检查、签名和公证任务；签名凭据仍由 GitHub Secrets 注入临时钥匙串。
+
+本机开发打包输出到 apps/quick-snap/build/distribution-dev，不替换已安装的 Quick Snap，也不修改现有权限。
 
 本机持有正式证书与钥匙串公证授权时：
 
 ```sh
-SIGNING_IDENTITY='Developer ID Application: 你的证书名称 (TEAMID)' bash Scripts/package.sh --release
-NOTARY_PROFILE='你的钥匙串公证配置名' bash Scripts/notarize.sh 'build/release-candidates/QuickSnap-0.2.1-build15/Quick Snap.app'
+SIGNING_IDENTITY='Developer ID Application: 你的证书名称 (TEAMID)' \
+NOTARY_PROFILE='你的钥匙串公证配置名' \
+one run quick-snap:release
 ```
 
-正式产物只在应用和 DMG 的公证、票据及 Gatekeeper 验证全部通过后写入 build/releases。公证中断保留提交 ID，可重运行继续等待。正式候选目录不会被覆盖，修改候选内容前应换用新构建号。
+正式产物只在应用和 DMG 的公证、票据及 Gatekeeper 验证全部通过后写入 apps/quick-snap/build/releases。公证中断保留提交 ID，可重运行继续等待。正式候选目录不会被覆盖，修改候选内容前应换用新构建号。
 
 适用于 Apple 芯片、macOS 14+。流水线验证脚本、Swift 核心测试和 Release 编译；真实鼠标、键位录入、屏幕录制权限、多屏和输入框粘贴兼容性仍需实机测试。正式分发签名与本机开发签名不同，首次安装后 macOS 可能要求重新授权。
+
+公证等待中断后，用相同的 `QUICK_SNAP_VERSION`、`QUICK_SNAP_BUILD_NUMBER` 和 `NOTARY_PROFILE` 执行 `one run quick-snap:notarize` 继续原候选，不要重新执行 release 覆盖候选。`release` 只签名公证，上传 GitHub Release 仍由手动流水线负责。

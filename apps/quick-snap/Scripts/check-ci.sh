@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+bash -n ../../scripts/bootstrap-one.sh
 for script in Scripts/*.sh; do
   if [[ "$script" == Scripts/build.sh || "$script" == Scripts/build-icons.sh ]]; then
     zsh -n "$script"

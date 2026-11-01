@@ -1,0 +1,72 @@
+min_version = '2026.9.7'
+monorepo_root = true
+
+[monorepo]
+config_roots = []
+lockfile = false
+
+[tasks]
+[tasks.build]
+depends = ['//:quick-snap:build']
+
+[tasks.check]
+depends = ['//:quick-snap:check']
+
+[tasks.dev]
+depends = ['//:quick-snap:dev']
+
+[tasks.'quick-snap:build']
+description = 'Build the development app / 构建开发应用'
+dir = 'apps/quick-snap'
+raw_args = true
+run = 'task build --'
+
+[tasks.'quick-snap:check']
+description = 'Check scripts, test and compile / 检查脚本、测试并编译'
+dir = 'apps/quick-snap'
+raw_args = true
+run = 'task check --'
+
+[tasks.'quick-snap:dev']
+description = 'Build and run Quick Snap / 构建并运行 Quick Snap'
+dir = 'apps/quick-snap'
+raw_args = true
+run = 'task dev --'
+
+[tasks.'quick-snap:notarize']
+description = 'Notarize the release candidate and DMG / 公证发布候选与 DMG'
+dir = 'apps/quick-snap'
+raw_args = true
+run = 'task notarize --'
+
+[tasks.'quick-snap:pack']
+description = 'Build a local unsigned DMG / 构建本地未公证 DMG'
+dir = 'apps/quick-snap'
+raw_args = true
+run = 'task pack --'
+
+[tasks.'quick-snap:release']
+description = 'Sign and notarize without publishing / 签名并公证，不上传发布'
+dir = 'apps/quick-snap'
+raw_args = true
+run = 'task release --'
+
+[tasks.'quick-snap:sign']
+description = 'Build a Developer ID release candidate / 构建 Developer ID 发布候选'
+dir = 'apps/quick-snap'
+raw_args = true
+run = 'task sign --'
+
+[tasks.'quick-snap:test']
+description = 'Run Swift and release-script tests / 运行 Swift 与发布脚本测试'
+dir = 'apps/quick-snap'
+raw_args = true
+run = 'task test --'
+
+[tasks.test]
+depends = ['//:quick-snap:test']
+
+[tools]
+task = '3.51.1'
+
+# one:managed-v1 {"[\"min_version\"]":"ad6f97160bb76deb7c728963622863da4c533663e12165c59d9fd9330611ddc4","[\"monorepo\",\"config_roots\"]":"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945","[\"monorepo\",\"lockfile\"]":"fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa","[\"monorepo_root\"]":"b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b","[\"tasks\",\"build\",\"depends\"]":"2bc6791c5549d52403757dafee60af128d14615f4243f01dcd91b1737008a285","[\"tasks\",\"check\",\"depends\"]":"4062969c727abacbcc9b8af7ab290483ee1956df570264368222ea4fcffd13c1","[\"tasks\",\"dev\",\"depends\"]":"be6bb3538889284f6663aa64b6010d749f98c293292001a14ee5ee0d33dadf96","[\"tasks\",\"quick-snap:build\",\"description\"]":"de84280d93fd2f15ee8a3a5c5b2506f158964f6b7aff1e00b501400f1a65ce3a","[\"tasks\",\"quick-snap:build\",\"dir\"]":"7f92308471b510194321a2a56b5a46527bf3a063f63c15b0ac3aa51d3544ff31","[\"tasks\",\"quick-snap:build\",\"raw_args\"]":"b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b","[\"tasks\",\"quick-snap:build\",\"run\"]":"18131ed52d0a32e786dbd35201898a7653480b88b83411cc7fee0a5ec85e59aa","[\"tasks\",\"quick-snap:check\",\"description\"]":"a3ca823d736a7fcf4f3e9bc8d7d4cc46d4a4736fd626377b67656514fe01ed91","[\"tasks\",\"quick-snap:check\",\"dir\"]":"7f92308471b510194321a2a56b5a46527bf3a063f63c15b0ac3aa51d3544ff31","[\"tasks\",\"quick-snap:check\",\"raw_args\"]":"b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b","[\"tasks\",\"quick-snap:check\",\"run\"]":"6e132a2fffbaf1847c695d5c05c675359fc1784f03648cc7b379edd34cf597e1","[\"tasks\",\"quick-snap:dev\",\"description\"]":"33614d43e776d1d4b20659e0adf397f871e4e1af392f074c970dee079ca14a17","[\"tasks\",\"quick-snap:dev\",\"dir\"]":"7f92308471b510194321a2a56b5a46527bf3a063f63c15b0ac3aa51d3544ff31","[\"tasks\",\"quick-snap:dev\",\"raw_args\"]":"b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b","[\"tasks\",\"quick-snap:dev\",\"run\"]":"6dc36fa9540069369ce47f562fb8129dd298b89e080964f0fe4a3caa9093b1dc","[\"tasks\",\"quick-snap:notarize\",\"description\"]":"3bdf945a9f1aa86caf392971c93151226349c688547559213dbee4240ef64ce4","[\"tasks\",\"quick-snap:notarize\",\"dir\"]":"7f92308471b510194321a2a56b5a46527bf3a063f63c15b0ac3aa51d3544ff31","[\"tasks\",\"quick-snap:notarize\",\"raw_args\"]":"b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b","[\"tasks\",\"quick-snap:notarize\",\"run\"]":"e0a99a7545637dcd0fe9451d0a7ab96e48a7dbf6826f64302584196e10da6b08","[\"tasks\",\"quick-snap:pack\",\"description\"]":"5854b88bb2cfc3fa3bbf60a4033900e197f6f74516d63d70a89e80093be98fe5","[\"tasks\",\"quick-snap:pack\",\"dir\"]":"7f92308471b510194321a2a56b5a46527bf3a063f63c15b0ac3aa51d3544ff31","[\"tasks\",\"quick-snap:pack\",\"raw_args\"]":"b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b","[\"tasks\",\"quick-snap:pack\",\"run\"]":"487221d9580d67c061d2c649144381eac0b84546149e37fa57ed5700e495bf93","[\"tasks\",\"quick-snap:release\",\"description\"]":"f82b7d8fd402ac6847d6a2d7a4dfc8e90d6f0fb67f2a37596ff5297d634313d7","[\"tasks\",\"quick-snap:release\",\"dir\"]":"7f92308471b510194321a2a56b5a46527bf3a063f63c15b0ac3aa51d3544ff31","[\"tasks\",\"quick-snap:release\",\"raw_args\"]":"b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b","[\"tasks\",\"quick-snap:release\",\"run\"]":"fb3eb9610c50eb96c8f46f1f29106d8bd39f096d5888517da88d4c41e81edde8","[\"tasks\",\"quick-snap:sign\",\"description\"]":"c2da3ae6ddcfda42ed8f55de6cf05a919c48d61dae5edd0f5db488e75226d3f8","[\"tasks\",\"quick-snap:sign\",\"dir\"]":"7f92308471b510194321a2a56b5a46527bf3a063f63c15b0ac3aa51d3544ff31","[\"tasks\",\"quick-snap:sign\",\"raw_args\"]":"b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b","[\"tasks\",\"quick-snap:sign\",\"run\"]":"ba4d73c5df875d24a3f19b1edfb111d584e267b8edd1cffb89fe64a10cbb893c","[\"tasks\",\"quick-snap:test\",\"description\"]":"bc638ae9c64c7dfa4fdc185ad579f2d2f75b9b52e4032f79956630031838f02b","[\"tasks\",\"quick-snap:test\",\"dir\"]":"7f92308471b510194321a2a56b5a46527bf3a063f63c15b0ac3aa51d3544ff31","[\"tasks\",\"quick-snap:test\",\"raw_args\"]":"b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b","[\"tasks\",\"quick-snap:test\",\"run\"]":"f5f157e1853712703e265788f7e0c7ad096c57f7990aecb8f2d4b8321c831731","[\"tasks\",\"test\",\"depends\"]":"7e382992b81995fd6a1fbcdaa28b30cdf117261ecce4c6ed58e569bde0488a39","[\"tools\",\"task\"]":"1356a2b6b1160821fca517ff7bac3845ec646e6cfd1e71e067ddab020d998803"}

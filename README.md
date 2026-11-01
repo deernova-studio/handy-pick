@@ -18,18 +18,35 @@
 
 应用不读取或保存键盘输入文本，仅检查物理键码与修饰键标志，用于匹配用户主动录入的一个快捷键。绑定配置保存在本机 UserDefaults。
 
-构建产物在 `build/Quick Snap.app`；当前本机安装在 `/Applications/Quick Snap.app`，重建后须更新安装副本。
+构建产物在 `apps/quick-snap/build/Quick Snap.app`；当前本机安装在 `/Applications/Quick Snap.app`，重建后须更新安装副本。
 
 ## 构建
 
-macOS 14+、Xcode / Swift 5.9+，没有第三方依赖。
+macOS 14+、Xcode / Swift 5.9+，没有第三方 Swift 依赖。应用位于 `apps/quick-snap`，工作区由 One CLI 管理。
+
+首次准备（需要 Go 1.27.1 构建固定版本的 One）：
 
 ```sh
-swift test
-zsh Scripts/build.sh
+bash scripts/bootstrap-one.sh
+export PATH="$PWD/.cache/one/bin:$PATH"
+one mise trust
+one mise install
 ```
 
-用 Xcode 打开 `Package.swift` 可编辑源码。脚本生成可双击运行的 `.app`，默认本机 ad-hoc 签名。可通过环境变量 `QUICK_SNAP_SIGN_IDENTITY` 指定已有的 Apple Development 签名身份。重新构建后如果系统撤销权限，需要重新授权；权限应授予 `.app`，而不是命令行 Swift 进程。
+当前固定上游已合并提交 `bc73b921d85e1896044167c0be96a2b8936edf54`，安装脚本校验源码 SHA-256。正式版 v0.1.24 尚不支持 Swift；不要直接用它覆盖此版本。
+
+```sh
+one run quick-snap:check  # 发布脚本测试、Swift 测试与 Release 编译
+one run quick-snap:build # 生成开发 .app
+one run quick-snap:dev   # 构建并前台运行，停止任务即可退出
+one run quick-snap:pack  # 生成本地未公证 DMG
+```
+
+`dev` 前先退出已运行的 Quick Snap，避免两份实例同时监听鼠标。开发任务不会替换 `/Applications` 中的安装副本。修改 `apps/quick-snap/Taskfile.yml` 后运行 `one init mise`，不要直接维护生成的任务配置。
+
+本地 DMG 位于 `apps/quick-snap/build/distribution-dev/QuickSnap-local.dmg`，仅供本机验证；正式签名公证使用发布流程。
+
+用 Xcode 打开 `apps/quick-snap/Package.swift` 可编辑源码。脚本生成可双击运行的 `.app`，默认本机 ad-hoc 签名。可通过环境变量 `QUICK_SNAP_SIGN_IDENTITY` 指定已有的 Apple Development 签名身份。重新构建后如果系统撤销权限，需要重新授权；权限应授予 `.app`，而不是命令行 Swift 进程。
 
 建议持续使用同一个 Apple Development 身份构建。切换签名身份（包括切回 ad-hoc）可能使 macOS 要求重新授予权限。
 
@@ -39,7 +56,7 @@ zsh Scripts/build.sh
 
 ## 图标
 
-黑白的剪刀与图片组合，用流畅、简洁的线条表达剪取画面。`Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `Sources/QuickSnap/MenuBarIcon.swift` 绘制的 宽 22、高 18 点的白色圆角小底；沿用应用图标的倾斜图片与剪刀轮廓，简化后的线条以透明 alpha 镂空，透出菜单栏底色。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `Resources/IconPrompt.txt`。运行 `zsh Scripts/build-icons.sh` 可重新生成不同尺寸资源。
+黑白的剪刀与图片组合，用流畅、简洁的线条表达剪取画面。`apps/quick-snap/Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `apps/quick-snap/Sources/QuickSnap/MenuBarIcon.swift` 绘制的 宽 22、高 18 点的白色圆角小底；沿用应用图标的倾斜图片与剪刀轮廓，简化后的线条以透明 alpha 镂空，透出菜单栏底色。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `apps/quick-snap/Resources/IconPrompt.txt`。运行 `zsh apps/quick-snap/Scripts/build-icons.sh` 可重新生成不同尺寸资源。
 
 ## 行为与边界
 

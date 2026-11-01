@@ -43,7 +43,7 @@ jobs:
       - name: 检查分支、仓库与版本冲突
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 Scripts/github_release.py preflight
+        run: python3 apps/quick-snap/Scripts/github_release.py preflight
       - name: 检查签名配置是否齐全
         env:
           HAS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 != '' }}
@@ -71,8 +71,20 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - name: 安装固定版本 One CLI 与任务工具
+        run: |
+          bash scripts/bootstrap-one.sh
+          echo "$GITHUB_WORKSPACE/.cache/one/bin" >> "$GITHUB_PATH"
+          .cache/one/bin/one mise trust
+          .cache/one/bin/one mise install
+      - name: 检查 One 任务配置是否同步
+        run: one init mise --dry-run -o json | python3 -c 'import json,sys; p=json.load(sys.stdin); sys.exit("Run one init mise and commit mise.toml" if p["changes"] else 0)'
       - name: 测试与编译
-        run: bash Scripts/check-ci.sh
+        run: one run quick-snap:check --ui stream
       - name: 安装临时签名身份与公证授权
         env:
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
@@ -80,22 +92,22 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_ID: ${{ vars.APPLE_ID }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
-        run: bash Scripts/ci-signing.sh install
+        run: bash apps/quick-snap/Scripts/ci-signing.sh install
       - name: 打包并签名
-        run: bash Scripts/package.sh --release
+        run: one run quick-snap:sign --ui stream
       - name: Apple 公证与 DMG 验证
-        run: bash Scripts/notarize.sh "build/release-candidates/QuickSnap-${QUICK_SNAP_VERSION}-build${QUICK_SNAP_BUILD_NUMBER}/Quick Snap.app"
+        run: one run quick-snap:notarize --ui stream
       - name: 清理签名钥匙串
         if: always()
-        run: bash Scripts/ci-signing.sh cleanup
+        run: bash apps/quick-snap/Scripts/ci-signing.sh cleanup
       - name: 保存已公证的安装包
         id: artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: macos-release-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            build/releases/QuickSnap-${{ inputs.version }}-build${{ inputs.build_number }}/*.dmg
-            build/releases/QuickSnap-${{ inputs.version }}-build${{ inputs.build_number }}/SHA256SUMS.txt
+            apps/quick-snap/build/releases/QuickSnap-${{ inputs.version }}-build${{ inputs.build_number }}/*.dmg
+            apps/quick-snap/build/releases/QuickSnap-${{ inputs.version }}-build${{ inputs.build_number }}/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7
 
@@ -118,4 +130,4 @@ jobs:
       - name: 校验文件并发布
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 Scripts/github_release.py publish build/github-release
+        run: python3 apps/quick-snap/Scripts/github_release.py publish build/github-release
