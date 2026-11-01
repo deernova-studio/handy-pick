@@ -117,24 +117,19 @@ private final class HistoryTile: PaperlightButton {
         (isHighlighted ? Paperlight.ink : (hovered ? Paperlight.controlLine : Paperlight.line)).setStroke()
         card.lineWidth = isHighlighted ? 1 : Paperlight.hairline(self); card.stroke()
         if window?.firstResponder === self { Paperlight.ink.setStroke(); card.lineWidth = 2; card.stroke() }
-        let contentRect = NSRect(x: 12, y: 32, width: bounds.width-24, height: bounds.height-44)
-        let metadata: String
+        let contentRect = bounds.insetBy(dx: 12, dy: 12)
         if case .image = entry.content {
-            metadata = "图片"
             if let preview {
                 let scale = min(contentRect.width / preview.size.width, contentRect.height / preview.size.height)
                 let size = NSSize(width: preview.size.width * scale, height: preview.size.height * scale)
                 preview.draw(in: NSRect(x: contentRect.midX-size.width/2, y: contentRect.midY-size.height/2, width: size.width, height: size.height))
             }
         } else if case .text(let text) = entry.content {
-            metadata = "文字"
             let paragraph = NSMutableParagraphStyle(); paragraph.lineBreakMode = .byWordWrapping
             paragraph.minimumLineHeight = 18; paragraph.maximumLineHeight = 18
             (String(text.prefix(300)) as NSString).draw(with: contentRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: [
                 .font: Paperlight.body, .foregroundColor: Paperlight.ink, .paragraphStyle: paragraph])
-        } else { metadata = "" }
-        (metadata as NSString).draw(at: NSPoint(x: 12, y: 12), withAttributes: [
-            .font: Paperlight.caption, .foregroundColor: Paperlight.tertiary])
+        }
     }
 
     @objc private func choose() { onSelect?() }
