@@ -107,7 +107,8 @@ final class ShortcutTrigger {
             return false
         }
         // Pair releases even while the screenshot overlay temporarily suspends shortcuts.
-        if type == .keyUp, keyGate.up(code: code) == .consume { return true }
+        if type == .keyUp { return keyGate.up(code: code) == .consume }
+        if type == .keyDown, let held = keyGate.heldResult(code: code) { return held == .consume }
         guard active, !suspended else { return false }
         switch binding {
         case .mouse(let selected):
@@ -119,9 +120,13 @@ final class ShortcutTrigger {
             else if type == .otherMouseUp { origin = nil }
             return true
         case .key:
-            guard type == .keyDown else { return false }
+            guard type == .keyDown, binding.matchesKey(code, flags: flags),
+                  event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else { return false }
+            let allowShortcut = !binding.needsTypingProtection || TypingFocus.allowsShortcut(for: frontmostPID)
+            if !allowShortcut { recognizer.cancel() }
             let result = keyGate.down(binding: binding, code: code, flags: flags,
-                                      repeating: event.getIntegerValueField(.keyboardEventAutorepeat) != 0)
+                                      repeating: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
+                                      allowShortcut: allowShortcut)
             if result == .press { press(at: .zero, keyboard: true) }
             return result != .pass
         case .modifier(let selected):
@@ -135,6 +140,9 @@ final class ShortcutTrigger {
         let token = generation
         DispatchQueue.main.async { [weak self] in
             guard let self, self.running, !self.recording, !self.suspended, self.generation == token else { return }
+            if keyboard, self.binding.needsTypingProtection, !TypingFocus.allowsShortcut(for: gesture.target) {
+                self.recognizer.cancel(); return
+            }
             let mouse = NSEvent.mouseLocation
             let location = keyboard ? CGPoint(x: mouse.x, y: (NSScreen.screens.first?.frame.maxY ?? 0)-mouse.y) : gesture.point
             self.onAction?(ClickRecognizer.Gesture(target: gesture.target, point: location))
