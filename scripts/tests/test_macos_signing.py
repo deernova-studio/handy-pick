@@ -5,6 +5,7 @@ import io
 import os
 from pathlib import Path
 import signal
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -30,8 +31,15 @@ class SigningTests(unittest.TestCase):
         self.deleted = False
         self.failure = None
         self.output = io.StringIO()
+        self.search_list = ["/Users/test/Library/Keychains/login.keychain-db"]
+        self.original_search_list = list(self.search_list)
 
     def apple(self, label, args):
+        if "list-keychains" in args:
+            if "-s" in args:
+                self.search_list = [os.path.realpath(p) for p in args[args.index("-s") + 1:]]
+                return ""
+            return shlex.join(self.search_list)
         if "create-keychain" in args:
             path = Path(args[-1])
             self.directory = path.parent
@@ -62,6 +70,7 @@ class SigningTests(unittest.TestCase):
         self.assertEqual(code, 0)
         popen.assert_not_called()
         self.assertTrue(self.deleted)
+        self.assertEqual(self.search_list, self.original_search_list)
         self.assertFalse(self.directory.exists())
         for value in self.env.values():
             self.assertNotIn(value, self.output.getvalue())
@@ -80,6 +89,19 @@ class SigningTests(unittest.TestCase):
         self.assertEqual(kwargs["env"]["SIGNING_KEYCHAIN"], kwargs["env"]["NOTARY_KEYCHAIN"])
         self.assertTrue(kwargs["start_new_session"])
         self.assertTrue(self.deleted)
+        self.assertEqual(self.search_list, self.original_search_list)
+
+    def test_cleanup_preserves_keychains_added_during_build(self):
+        child = Mock()
+        child.poll.return_value = 0
+        added = "/Users/test/Library/Keychains/another.keychain-db"
+        def finished():
+            self.search_list.append(added)
+            return 0
+        child.wait.side_effect = finished
+        code, _ = self.execute(["tool"], child)
+        self.assertEqual(code, 0)
+        self.assertEqual(self.search_list, self.original_search_list + [added])
 
     def test_cleanup_after_import_or_notary_failure(self):
         for label in ("Import Developer ID", "Validate notarization credentials"):
@@ -129,6 +151,7 @@ class SigningTests(unittest.TestCase):
         self.assertTrue(self.deleted)
         self.assertFalse(self.directory.exists())
         self.assertEqual(signal.getsignal(signal.SIGTERM), before)
+        self.assertEqual(self.search_list, self.original_search_list)
 
 
 class SetupTests(unittest.TestCase):

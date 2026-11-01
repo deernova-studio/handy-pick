@@ -75,7 +75,7 @@ OIDC 配置（当前仓库的真实 immutable subject，不能省略数字 ID）
 
 本机公证中断时，保留原候选，用相同版本/构建号执行 `one run quick-snap:notarize` 继续。不要重跑 release 覆盖候选。云端 runner 是临时机器；公证失败后重新构建应使用新构建号。只有 publish 作业失败时，可以 Re-run failed jobs 继续原有草稿。
 
-签名包装器每次建立独立临时钥匙串，通过显式参数选择它，不修改默认钥匙串或搜索列表。原始 P12 导入后立即删除，原始密码不传给构建子进程；成功、失败及 SIGINT/SIGTERM 退出都会清理钥匙串。断电或 SIGKILL 无法执行进程清理；如出现此情况，可删除系统临时目录中该次 `one-macos-signing-*` 残留。流水线日志由官方 Action 屏蔽注入的值，脚本不回显密钥或 Apple 认证命令输出。
+签名包装器每次建立独立临时钥匙串，通过显式参数选择它，不修改默认钥匙串。执行构建期间将临时钥匙串加入用户搜索列表，以便 codesign 解析证书链；结束时移除该项并保留其他钥匙串。原始 P12 导入后立即删除，原始密码不传给构建子进程；成功、失败及 SIGINT/SIGTERM 退出都会清理钥匙串。断电或 SIGKILL 无法执行进程清理；如出现此情况，可删除系统临时目录中该次 `one-macos-signing-*` 残留。流水线日志由官方 Action 屏蔽注入的值，脚本不回显密钥或 Apple 认证命令输出。
 
 `signing-setup` 的终端交互标记由根 mise.toml 中对应任务的 `interactive = true` 保留；当前 One 的 Taskfile 发现器不传递这个字段。`one init mise` 会保留该手动扩展项。
 

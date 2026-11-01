@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shlex
 import shutil
 import signal
 import subprocess
@@ -52,6 +53,7 @@ def run_signed(command, env):
     child = None
     completed = False
     cleanup_error = None
+    search_list_added = False
     previous = {}
 
     def interrupted(signum, _frame):
@@ -86,6 +88,13 @@ def run_signed(command, env):
         print("Signing credentials verified / 签名与公证凭据验证通过", flush=True)
         code = 0
         if command:
+            # codesign needs the keychain in the search list to resolve the
+            # certificate chain, even with an explicit --keychain argument.
+            existing = shlex.split(private_command("Read keychain search list",
+                                  ["/usr/bin/security", "list-keychains", "-d", "user"]))
+            search_list_added = True
+            private_command("Register signing keychain", ["/usr/bin/security", "list-keychains",
+                            "-d", "user", "-s", keychain, *existing])
             child = subprocess.Popen(command, env=child_env, start_new_session=True)
             code = child.wait()
         completed = True
@@ -101,6 +110,17 @@ def run_signed(command, env):
                 child.wait()
             except ProcessLookupError:
                 pass
+        try:
+            if search_list_added:
+                current = shlex.split(private_command("Read keychain search list",
+                                     ["/usr/bin/security", "list-keychains", "-d", "user"]))
+                # macOS canonicalizes /var to /private/var. Preserve other
+                # keychains added during the build when removing our entry.
+                remaining = [p for p in current if os.path.realpath(p) != os.path.realpath(keychain)]
+                private_command("Remove signing keychain from search list",
+                                ["/usr/bin/security", "list-keychains", "-d", "user", "-s", *remaining])
+        except SigningError as error:
+            cleanup_error = error
         try:
             if Path(keychain).exists():
                 private_command("Delete temporary keychain", ["/usr/bin/security", "delete-keychain", keychain])

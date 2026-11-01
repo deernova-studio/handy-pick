@@ -1,5 +1,13 @@
 # 验证记录
 
+## 2026-11-01 One CLI 正式签名 DMG 实测
+
+- `one run quick-snap:check --ui stream`：23 项 Swift 测试与 25 项 Python 测试、Release 编译通过；补充搜索列表清理回归后，签名相关 12 项 Python 测试全部通过。
+- 修复 macOS codesign 无法直接使用搜索列表外临时钥匙串的问题：构建时加入，结束时移除；按规范化路径匹配，并保留同时加入的其他钥匙串。不修改默认钥匙串。
+- `one run quick-snap:release --ui stream` 成功生成 `apps/quick-snap/build/releases/QuickSnap-0.2.1-build15/QuickSnap-0.2.1-macOS-arm64.dmg`，大小 1,854,379 字节。
+- 应用和 DMG 均采用 Developer ID Application（团队 LVWWAF3DBK）签名；Apple 公证均为 Accepted，公证票据附加及验证、Gatekeeper、磁盘镜像完整性检查全部通过。最终文件签名、公证票据和 SHA-256 校验再次通过。
+- 退出后用户钥匙串列表仅保留原 login.keychain-db，临时签名目录为零。未替换已安装应用，未上传 GitHub Release。
+
 ## 2026-11-01 首次凭据写入修复
 
 - 用户已在本机通过 P12 私钥导入、签名身份匹配和 Apple 公证凭据校验；写入失败定位为 `INFISICAL_FOLDER_NOT_FOUND`，并非密码错误。
