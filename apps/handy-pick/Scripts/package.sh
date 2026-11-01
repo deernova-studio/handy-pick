@@ -54,6 +54,9 @@ STAGED_APP="$STAGING/HandyPick.app"
 mkdir -p "$STAGED_APP/Contents/MacOS" "$STAGED_APP/Contents/Resources"
 cp "$BINARY" "$STAGED_APP/Contents/MacOS/QuickSnap"
 cp Resources/QuickSnap.icns Resources/MenuIcon.png "$STAGED_APP/Contents/Resources/"
+for locale in Resources/*.lproj; do
+  ditto "$locale" "$STAGED_APP/Contents/Resources/$(basename "$locale")"
+done
 cp Resources/Info.plist "$STAGED_APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set CFBundleShortVersionString $VERSION" "$STAGED_APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set CFBundleVersion $BUILD_NUMBER" "$STAGED_APP/Contents/Info.plist"

@@ -50,7 +50,7 @@ class Release:
 
     @property
     def dmg_name(self):
-        return f"HandyPick-{self.version}-macOS-arm64.dmg"
+        return f"handypick-{self.version}-macOS-arm64.dmg"
 
     @property
     def marker(self):
@@ -60,7 +60,7 @@ class Release:
     def body(self):
         details = (
             "适用于 M 系列 Mac，需 macOS 14 或更新版本。\n\n"
-            "下载下方 DMG，打开后将「HandyPick」拖入「应用程序」。\n\n"
+            "下载下方 DMG，打开后将「随取 / handypick」拖入「应用程序」。\n\n"
             f"{self.marker}"
         )
         return f"{self.notes}\n\n{details}" if self.notes else details
@@ -159,7 +159,7 @@ def publish(api, release, directory):
     if not draft:
         draft = api.request("POST", "/releases", {
             "tag_name": release.tag, "target_commitish": release.sha,
-            "name": f"HandyPick {release.version}", "body": release.body,
+            "name": f"随取 handypick {release.version}", "body": release.body,
             "draft": True, "prerelease": False,
         })
     release_path = f'/releases/{draft["id"]}'
@@ -202,7 +202,7 @@ def main():
         print(f"发布成功：{url}")
         if os.environ.get("GITHUB_STEP_SUMMARY"):
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
-                summary.write(f"HandyPick {release.version} 已发布：[下载 Release]({url})\n")
+                summary.write(f"随取 handypick {release.version} 已发布：[下载 Release]({url})\n")
 
 
 if __name__ == "__main__":

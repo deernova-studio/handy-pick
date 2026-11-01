@@ -1,6 +1,16 @@
 # 验证记录
 
+## 2026-11-01 随取 / handypick 0.4.8 build 30
+
+- 中文显示名称为「随取」，英文为「handypick」。通过 InfoPlist.strings 本地化，保留既有 Bundle ID、签名身份、可执行文件与安装路径；菜单提示和退出项使用同一本地化名称。
+- 用独立测试应用的主 Bundle 分别指定 zh-Hans / en，确认 CFBundleDisplayName 与 Finder displayName 为「随取」/「handypick」；正式包中的两种语言资源与源码逐字节一致。
+- One check：41 项 Swift、26 项 Python 测试及 arm64 Release 编译通过；git diff 空白检查通过。
+- One release 完成 Developer ID 签名、应用与 DMG 的 Apple 公证、附票及 Gatekeeper 验证；正式文件名为 handypick-0.4.8-macOS-arm64.dmg。
+- 已更新本机安装副本并启动 0.4.8，确认仅一个应用进程、一个已启用的快捷键事件监听；旧版保留于 build/previous-installed-0.4.7.app。
+
 ## 2026-11-01 HandyPick 0.4.7 build 29
+
+- 用户实测确认焦点修复已正常，并授权提交、打包和发布。
 
 - 修复 0.4.6 将所有网页／普通容器都放行的回归。已识别且不可编辑的 AXWebArea、AXGroup、AXScrollArea、AXWindow 恢复普通键快捷操作；可编辑、可设置文本值或选中文字的容器仍保留正常输入，真正未知角色和查询失败仍放行。
 - 将 AX 控件读取与前台应用路由分离，使用独立 WKWebView 测试应用验证真实控件：页面背景 AXWebArea 返回允许快捷键；textarea 和 contenteditable 返回正常输入；再次点击背景恢复允许。查询只读取角色／可编辑性等元数据，不读取用户输入。

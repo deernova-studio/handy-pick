@@ -1,4 +1,6 @@
-# HandyPick
+# 随取 · handypick
+
+中文显示名称为「随取」，英文为「handypick」，跟随系统语言。Bundle ID、签名身份、内部可执行文件和安装路径保持不变，便于沿用已有设置与授权。
 
 一个用双击完成选中文字复制、剪贴板粘贴和框选截图的原生 macOS 菜单栏工具。默认双击鼠标中键，也可直接录入侧键、键盘按键、组合键或左右修饰键。
 
@@ -52,7 +54,7 @@ one run handy-pick:pack  # 生成本地未公证 DMG
 
 `dev` 前先退出已运行的 HandyPick，避免两份实例同时监听鼠标。开发任务不会替换 `/Applications` 中的安装副本。修改 `apps/handy-pick/Taskfile.yml` 后运行 `one init mise`，不要直接维护生成的任务配置。
 
-本地 DMG 位于 `apps/handy-pick/build/distribution-dev/HandyPick-local.dmg`，仅供本机验证；正式签名公证使用发布流程。
+本地 DMG 位于 `apps/handy-pick/build/distribution-dev/handypick-local.dmg`，仅供本机验证；正式签名公证使用发布流程。
 
 用 Xcode 打开 `apps/handy-pick/Package.swift` 可编辑源码。脚本生成可双击运行的 `.app`，默认本机 ad-hoc 签名。可通过环境变量 `QUICK_SNAP_SIGN_IDENTITY` 指定已有的 Apple Development 签名身份。重新构建后如果系统撤销权限，需要重新授权；权限应授予 `.app`，而不是命令行 Swift 进程。
 

@@ -36,7 +36,7 @@ fi
 
 WORK="$(dirname "$APP")/notarization"
 DEST="build/releases/HandyPick-${VERSION}-build${BUILD_NUMBER}"
-DMG_NAME="HandyPick-${VERSION}-macOS-arm64.dmg"
+DMG_NAME="handypick-${VERSION}-macOS-arm64.dmg"
 if [ -e "$DEST" ]; then
   echo "正式发布目录已存在，请保留该版本：$DEST" >&2
   exit 1
@@ -90,7 +90,7 @@ if [ ! -f "$DMG" ]; then
   mkdir -p "$STAGING/volume"
   ditto "$APP" "$STAGING/volume/HandyPick.app"
   ln -s /Applications "$STAGING/volume/Applications"
-  hdiutil create -volname 'HandyPick' -srcfolder "$STAGING/volume" -format UDZO "$STAGING/$DMG_NAME"
+  hdiutil create -volname '随取 handypick' -srcfolder "$STAGING/volume" -format UDZO "$STAGING/$DMG_NAME"
   KEYCHAIN_ARGS=()
   if [ -n "${SIGNING_KEYCHAIN:-}" ]; then KEYCHAIN_ARGS=(--keychain "$SIGNING_KEYCHAIN"); fi
   codesign --sign "$IDENTITY" "${KEYCHAIN_ARGS[@]}" --timestamp "$STAGING/$DMG_NAME"

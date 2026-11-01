@@ -38,7 +38,7 @@ import OSLog
         NSApp.setActivationPolicy(.accessory)
         status = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         status.button?.image = MenuBarIcon.make()
-        status.button?.setAccessibilityLabel("HandyPick")
+        status.button?.setAccessibilityLabel(AppIdentity.displayName)
         status.button?.target = self; status.button?.action = #selector(statusClicked)
         status.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         shortcutPanel.onDismiss = { [weak self] in
@@ -83,7 +83,7 @@ import OSLog
     }
 
     private func refresh() {
-        status.button?.toolTip = "HandyPick · 双击\(binding.displayName)复制 / 粘贴 / 截图\n\(message)"
+        status.button?.toolTip = "\(AppIdentity.displayName) · 双击\(binding.displayName)复制 / 粘贴 / 截图\n\(message)"
         panel.update(binding: binding.displayName, recording: trigger.recording, needsPermission: !permissionsReady)
     }
     private func inform(_ text: String) { message = text; refresh() }
@@ -123,7 +123,7 @@ import OSLog
         add("清空剪贴板记录", #selector(clearHistory), to: menu)
         add(trigger.running ? "暂停" : "启用", #selector(toggle), to: menu)
         if !permissionsReady { add("授予权限…", #selector(requestPermission), to: menu) }
-        menu.addItem(.separator()); add("退出 HandyPick", #selector(quit), to: menu)
+        menu.addItem(.separator()); add("退出 \(AppIdentity.displayName)", #selector(quit), to: menu)
         return menu
     }
     @discardableResult private func add(_ title: String, _ action: Selector, to menu: NSMenu) -> NSMenuItem {

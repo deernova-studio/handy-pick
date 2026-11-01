@@ -21,7 +21,7 @@ final class ShortcutPanel: NSPanel {
         level = .popUpMenu; hidesOnDeactivate = false
         collectionBehavior = [.transient, .fullScreenAuxiliary, .moveToActiveSpace]
         animationBehavior = .utilityWindow
-        title = "HandyPick"
+        title = AppIdentity.displayName
 
         editor.loadViewIfNeeded()
         let background = PaperlightSurface(frame: NSRect(origin: .zero, size: editor.preferredContentSize))
