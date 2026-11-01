@@ -1,13 +1,13 @@
-# Quick Snap
+# HandyPick
 
-一个专注于「框选截图 → 粘贴」的原生 macOS 菜单栏工具。默认双击鼠标中键，也可直接录入侧键、键盘按键、组合键或左右修饰键。
+一个用双击完成选中文字复制、剪贴板粘贴和框选截图的原生 macOS 菜单栏工具。默认双击鼠标中键，也可直接录入侧键、键盘按键、组合键或左右修饰键。
 
 ## 使用
 
-1. 打开「应用程序 → Quick Snap」。启动后只显示剪刀图标，没有主窗口或 Dock 图标。
+1. 打开「应用程序 → HandyPick」。启动后只显示叠卡片图标，没有主窗口或 Dock 图标。
 2. 点击菜单栏图标，出现快捷键小面板。需要更换时点当前键位，再按一次中键、侧键或键盘按键，自动保存；修饰键按下后松开即可录入。Esc 取消录入。组合键可一次录入，如 ⌃⌥K。
-3. 输入区外双击绑定按键 → 左键拖动框选 → 松开复制。
-4. 输入区内双击同一按键 → 聚焦该输入区并粘贴最近截图。
+3. 选中文字后，将鼠标留在该文字区域，双击绑定按键 → 复制选中文字（优先于粘贴）。
+4. 没有选区时，在输入区内双击 → 粘贴当前剪贴板内容；在其他位置双击 → 左键拖动框选截图，松开复制。
 5. Esc 或右键取消框选。单击和键盘长按重复均不会触发截图或粘贴。
 
 所有快捷动作统一双击；组合键可以保持修饰键、连续按两次主键。双击左/右 Command、Shift、Option、Control 或 Fn 也可绑定。普通键和组合键在启用期间被专用于截图 / 粘贴（单击也会被接管），修饰键本身的系统功能保留。建议选择中键、侧键、修饰键或不常用的键位，避免影响正常输入。
@@ -16,9 +16,11 @@
 
 首次使用如果缺少屏幕录制或辅助功能权限，小面板会显示授权入口。已有权限时不显示其他设置项目，没有独立的设置窗口。
 
-应用不读取或保存键盘输入文本，仅检查物理键码与修饰键标志，用于匹配用户主动录入的一个快捷键。绑定配置保存在本机 UserDefaults。
+快捷键监听只检查物理键码与修饰键标志，不记录键入内容。双击复制时，通过辅助功能读取当前指针所在文字区域的显式选区，并放入本机剪贴板；不记录或上传内容，不读取密码框。绑定配置保存在本机 UserDefaults。
 
-构建产物在 `apps/quick-snap/build/Quick Snap.app`；当前本机安装在 `/Applications/Quick Snap.app`，重建后须更新安装副本。
+划词复制要求目标应用提供辅助功能选区；未提供选区的应用暂不能自动识别，仍可使用 ⌘C，然后双击粘贴。此版本将选中文字复制为纯文本；粘贴使用系统 ⌘V，支持的图片、富文本等类型由目标应用决定。内部 Bundle ID、偏好设置域和 One 任务名仍保留 quick-snap，正式签名身份不变。
+
+构建产物在 `apps/quick-snap/build/HandyPick.app`；当前本机安装在 `/Applications/HandyPick.app`，重建后须更新安装副本。
 
 ## 构建
 
@@ -32,7 +34,7 @@ one install
 
 该任务构建开发版，并将 `~/.local/bin/one` 链接到源码仓库内的程序。确保 `~/.local/bin` 在 PATH 中，并保留该源码仓库。更新源码后再次执行 `one install` 即可。此命令是 One CLI 仓库的任务，应在该仓库中执行。
 
-回到 Quick Snap 仓库，准备任务工具：
+回到 HandyPick 仓库，准备任务工具：
 
 ```sh
 one mise trust
@@ -48,9 +50,9 @@ one run quick-snap:dev   # 构建并前台运行，停止任务即可退出
 one run quick-snap:pack  # 生成本地未公证 DMG
 ```
 
-`dev` 前先退出已运行的 Quick Snap，避免两份实例同时监听鼠标。开发任务不会替换 `/Applications` 中的安装副本。修改 `apps/quick-snap/Taskfile.yml` 后运行 `one init mise`，不要直接维护生成的任务配置。
+`dev` 前先退出已运行的 HandyPick，避免两份实例同时监听鼠标。开发任务不会替换 `/Applications` 中的安装副本。修改 `apps/quick-snap/Taskfile.yml` 后运行 `one init mise`，不要直接维护生成的任务配置。
 
-本地 DMG 位于 `apps/quick-snap/build/distribution-dev/QuickSnap-local.dmg`，仅供本机验证；正式签名公证使用发布流程。
+本地 DMG 位于 `apps/quick-snap/build/distribution-dev/HandyPick-local.dmg`，仅供本机验证；正式签名公证使用发布流程。
 
 用 Xcode 打开 `apps/quick-snap/Package.swift` 可编辑源码。脚本生成可双击运行的 `.app`，默认本机 ad-hoc 签名。可通过环境变量 `QUICK_SNAP_SIGN_IDENTITY` 指定已有的 Apple Development 签名身份。重新构建后如果系统撤销权限，需要重新授权；权限应授予 `.app`，而不是命令行 Swift 进程。
 
@@ -64,7 +66,7 @@ one run quick-snap:pack  # 生成本地未公证 DMG
 
 ## 图标
 
-黑白的剪刀与图片组合，用流畅、简洁的线条表达剪取画面。`apps/quick-snap/Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `apps/quick-snap/Sources/QuickSnap/MenuBarIcon.swift` 绘制的 宽 22、高 18 点的白色圆角小底；沿用应用图标的倾斜图片与剪刀轮廓，简化后的线条以透明 alpha 镂空，透出菜单栏底色。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `apps/quick-snap/Resources/IconPrompt.txt`。运行 `zsh apps/quick-snap/Scripts/build-icons.sh` 可重新生成不同尺寸资源。
+采用用户选定的黑白叠卡片图案，以掀起的边角表达取用与传递。`apps/quick-snap/Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `apps/quick-snap/Sources/QuickSnap/MenuBarIcon.swift` 绘制的 宽 22、高 18 点的白色圆角小底；沿用应用图标的倾斜叠卡片与掀角轮廓，简化后的图形以透明 alpha 镂空，透出菜单栏底色。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `apps/quick-snap/Resources/IconPrompt.txt`。运行 `zsh apps/quick-snap/Scripts/build-icons.sh` 可重新生成不同尺寸资源。
 
 ## 行为与边界
 
@@ -73,7 +75,7 @@ one run quick-snap:pack  # 生成本地未公证 DMG
 - 网页编辑器若明确公布 AXEditableAncestor，可用该编辑区域作为目标，不要求它支持 AXValue 整体替换。命中测试只返回外层容器时，可回退到当前焦点输入框，但鼠标必须位于该输入框的实际边界内，且顶层命中、焦点和前台应用属于同一进程。
 - 对包含 Electron Framework 的应用，首次双击时按 [Electron 官方接口](https://www.electronjs.org/docs/latest/tutorial/accessibility#macos)启用其辅助功能树，并短暂等待渲染层提供控件信息；未识别为 Electron 的应用不设置此属性。异步等待期间若前台应用切换，取消本次操作。
 - 自绘编辑器或未提供完整辅助功能信息的应用可能无法识别输入区；可使用菜单栏复制最近截图后手动 ⌘V。无法自动聚焦的输入框需要先左键点入。
-- 输入框内还没有最近截图时提示先在输入框外截图；不会粘贴旧剪贴板的其他内容。
+- 选中文字优先复制；想覆盖输入框里的原文时，可直接使用 ⌘V。空剪贴板仅提示，不覆盖已有输入。
 - 粘贴不会按回车或发送聊天消息。目标应用需支持剪贴板图片。
 - 双击期间若前台应用改变，或者两次点击距离过大，不会识别为粘贴。
 - 框选时显示冻结画面；多显示器可任选一块屏幕框选，暂不跨屏拼接。

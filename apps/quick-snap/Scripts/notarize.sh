@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if [ "$#" -ne 1 ] || [ ! -d "$1/Contents" ]; then
-  echo "Usage: NOTARY_PROFILE=<钥匙串配置名> $0 <Quick Snap.app 路径>" >&2
+  echo "Usage: NOTARY_PROFILE=<钥匙串配置名> $0 <HandyPick.app 路径>" >&2
   exit 2
 fi
 if [ -z "${NOTARY_PROFILE:-}" ]; then
@@ -35,8 +35,8 @@ if [ "$(xcrun lipo -archs "$APP/Contents/MacOS/QuickSnap")" != arm64 ]; then
 fi
 
 WORK="$(dirname "$APP")/notarization"
-DEST="build/releases/QuickSnap-${VERSION}-build${BUILD_NUMBER}"
-DMG_NAME="QuickSnap-${VERSION}-macOS-arm64.dmg"
+DEST="build/releases/HandyPick-${VERSION}-build${BUILD_NUMBER}"
+DMG_NAME="HandyPick-${VERSION}-macOS-arm64.dmg"
 if [ -e "$DEST" ]; then
   echo "正式发布目录已存在，请保留该版本：$DEST" >&2
   exit 1
@@ -73,7 +73,7 @@ notarize() {
   echo "$name 公证通过。"
 }
 
-ZIP="$WORK/QuickSnap-${VERSION}-macOS-arm64.zip"
+ZIP="$WORK/HandyPick-${VERSION}-macOS-arm64.zip"
 if [ ! -f "$ZIP" ]; then
   ditto -c -k --sequesterRsrc --keepParent "$APP" "$STAGING/app.zip"
   mv "$STAGING/app.zip" "$ZIP"
@@ -88,9 +88,9 @@ spctl --assess --type execute --verbose=2 "$APP"
 DMG="$WORK/$DMG_NAME"
 if [ ! -f "$DMG" ]; then
   mkdir -p "$STAGING/volume"
-  ditto "$APP" "$STAGING/volume/Quick Snap.app"
+  ditto "$APP" "$STAGING/volume/HandyPick.app"
   ln -s /Applications "$STAGING/volume/Applications"
-  hdiutil create -volname 'Quick Snap' -srcfolder "$STAGING/volume" -format UDZO "$STAGING/$DMG_NAME"
+  hdiutil create -volname 'HandyPick' -srcfolder "$STAGING/volume" -format UDZO "$STAGING/$DMG_NAME"
   KEYCHAIN_ARGS=()
   if [ -n "${SIGNING_KEYCHAIN:-}" ]; then KEYCHAIN_ARGS=(--keychain "$SIGNING_KEYCHAIN"); fi
   codesign --sign "$IDENTITY" "${KEYCHAIN_ARGS[@]}" --timestamp "$STAGING/$DMG_NAME"

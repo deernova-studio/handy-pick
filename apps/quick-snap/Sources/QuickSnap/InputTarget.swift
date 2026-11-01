@@ -3,17 +3,68 @@ import ApplicationServices
 import QuickSnapCore
 
 @MainActor struct InputTarget {
+    enum Action {
+        case copy(String)
+        case paste(InputTarget)
+        case capture
+        case unavailable
+    }
     let element: AXUIElement
     let pid: pid_t
 
-    static func resolve(at point: CGPoint, foregroundPID: pid_t) async -> InputTarget? {
+    static func resolve(at point: CGPoint, foregroundPID: pid_t) async -> Action {
         let enabledWebAccessibility = enableWebAccessibility(for: foregroundPID)
         // Chromium publishes its renderer accessibility tree asynchronously.
         if enabledWebAccessibility { try? await Task.sleep(for: .milliseconds(100)) }
         for attempt in 0..<(enabledWebAccessibility ? 4 : 1) {
-            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == foregroundPID else { return nil }
-            if let target = at(point) { return target }
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == foregroundPID else { return .unavailable }
+            if let text = selectedText(at: point, foregroundPID: foregroundPID) { return .copy(text) }
+            if let target = at(point), target.pid == foregroundPID { return .paste(target) }
             if attempt < 3, enabledWebAccessibility { try? await Task.sleep(for: .milliseconds(80)) }
+        }
+        return .capture
+    }
+
+    /// Read only the explicit selection under the pointer. Never read a whole
+    /// document or send a speculative Cmd-C (some editors copy a line without a selection).
+    private static func selectedText(at point: CGPoint, foregroundPID: pid_t) -> String? {
+        guard AXIsProcessTrusted(), foregroundPID > 0,
+              foregroundPID != ProcessInfo.processInfo.processIdentifier else { return nil }
+        let system = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(system, 0.1)
+        var hit: AXUIElement?
+        guard AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &hit) == .success,
+              let hit else { return nil }
+        var hitPID: pid_t = 0
+        guard AXUIElementGetPid(hit, &hitPID) == .success, hitPID == foregroundPID else { return nil }
+        var current: AXUIElement? = hit
+        let deadline = ProcessInfo.processInfo.systemUptime + 0.35
+        for _ in 0..<12 {
+            guard let element = current, ProcessInfo.processInfo.systemUptime < deadline else { break }
+            AXUIElementSetMessagingTimeout(element, 0.1)
+            let secure = attribute(element, kAXSubroleAttribute) as? String == kAXSecureTextFieldSubrole as String
+            if secure { return nil }
+            let role = attribute(element, kAXRoleAttribute) as? String ?? ""
+            // Stop before window/application containers, which can expose a stale
+            // selection belonging to an unrelated editor elsewhere in the window.
+            if [kAXWindowRole as String, kAXApplicationRole as String].contains(role) { break }
+            if let text = attribute(element, kAXSelectedTextAttribute) as? String,
+               InputPolicy.canCopySelection(text, secure: secure) { return text }
+            if let value = attribute(element, kAXSelectedTextRangeAttribute),
+               CFGetTypeID(value) == AXValueGetTypeID() {
+                var range = CFRange()
+                if AXValueGetValue(unsafeBitCast(value, to: AXValue.self), .cfRange, &range), range.length > 0 {
+                    var selected: CFTypeRef?
+                    if AXUIElementCopyParameterizedAttributeValue(element,
+                        kAXStringForRangeParameterizedAttribute as CFString, value, &selected) == .success,
+                       let text = selected as? String, InputPolicy.canCopySelection(text, secure: secure) { return text }
+                }
+            }
+            // Do not inherit a selection from a surrounding web page when the
+            // gesture is inside a different text field with an empty selection.
+            if [kAXTextFieldRole as String, kAXTextAreaRole as String, kAXComboBoxRole as String].contains(role) { break }
+            guard let parent = elementAttribute(element, kAXParentAttribute), !CFEqual(parent, element) else { break }
+            current = parent
         }
         return nil
     }

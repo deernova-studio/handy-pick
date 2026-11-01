@@ -36,7 +36,7 @@ import OSLog
         NSApp.setActivationPolicy(.accessory)
         status = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         status.button?.image = MenuBarIcon.make()
-        status.button?.setAccessibilityLabel("Quick Snap")
+        status.button?.setAccessibilityLabel("HandyPick")
         status.button?.target = self; status.button?.action = #selector(statusClicked)
         status.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         shortcutPanel.onDismiss = { [weak self] in
@@ -72,7 +72,7 @@ import OSLog
     }
 
     private func refresh() {
-        status.button?.toolTip = "Quick Snap · 双击\(binding.displayName)截图 / 粘贴\n\(message)"
+        status.button?.toolTip = "HandyPick · 双击\(binding.displayName)复制 / 粘贴 / 截图\n\(message)"
         panel.update(binding: binding.displayName, recording: trigger.recording, needsPermission: !permissionsReady)
     }
     private func inform(_ text: String) { message = text; refresh() }
@@ -111,7 +111,7 @@ import OSLog
         let copy = add("复制最近截图", #selector(copyRecent), to: menu); copy.isEnabled = recentImage != nil
         add(trigger.running ? "暂停" : "启用", #selector(toggle), to: menu)
         if !permissionsReady { add("授予权限…", #selector(requestPermission), to: menu) }
-        menu.addItem(.separator()); add("退出 Quick Snap", #selector(quit), to: menu)
+        menu.addItem(.separator()); add("退出 HandyPick", #selector(quit), to: menu)
         return menu
     }
     @discardableResult private func add(_ title: String, _ action: Selector, to menu: NSMenu) -> NSMenuItem {
@@ -152,20 +152,33 @@ import OSLog
         preparing = true
         Task { [weak self] in
             guard let self else { return }
-            let input = await InputTarget.resolve(at: gesture.point, foregroundPID: gesture.target)
+            let action = await InputTarget.resolve(at: gesture.point, foregroundPID: gesture.target)
             guard self.trigger.running, !self.capture.active,
                   NSWorkspace.shared.frontmostApplication?.processIdentifier == gesture.target else {
                 self.preparing = false; return
             }
-            guard let input else {
+            let input: InputTarget
+            switch action {
+            case .copy(let text):
+                self.preparing = false
+                NSPasteboard.general.clearContents()
+                if NSPasteboard.general.setString(text, forType: .string) {
+                    self.recordGestureOutcome("selected-text-copied")
+                    self.inform("已复制选中文字")
+                } else { self.inform("复制失败，请重试") }
+                return
+            case .unavailable:
+                self.preparing = false; return
+            case .capture:
                 self.preparing = false
                 self.recordGestureOutcome("no-input-capture")
                 self.beginCapture(); return
+            case .paste(let target): input = target
             }
             defer { self.preparing = false }
-            guard self.recentImage != nil else {
-                self.recordGestureOutcome("input-found-no-screenshot")
-                self.inform("请先在输入区外双击截图"); NSSound.beep(); return
+            guard !(NSPasteboard.general.types?.isEmpty ?? true) else {
+                self.recordGestureOutcome("input-found-empty-clipboard")
+                self.inform("剪贴板为空"); NSSound.beep(); return
             }
             self.recordGestureOutcome("input-found-focus-pending")
             input.focus()
@@ -187,9 +200,8 @@ import OSLog
         if let tiff = recentImage.tiffRepresentation { NSPasteboard.general.setData(tiff, forType: .tiff) }
     }
     private func paste(to pid: Int32) {
-        guard recentImage != nil, AXIsProcessTrusted(), pid > 0,
+        guard AXIsProcessTrusted(), pid > 0,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
-        copyRecent()
         let source = CGEventSource(stateID: .combinedSessionState)
         let down = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true)
         let up = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false)
@@ -198,7 +210,7 @@ import OSLog
         up?.setIntegerValueField(.eventSourceUserData, value: ShortcutTrigger.syntheticEventTag)
         down?.post(tap: .cghidEventTap); up?.post(tap: .cghidEventTap)
         recordGestureOutcome("paste-shortcut-posted")
-        inform("已粘贴最近截图")
+        inform("已发送粘贴")
     }
 
     @objc private func requestPermission() {

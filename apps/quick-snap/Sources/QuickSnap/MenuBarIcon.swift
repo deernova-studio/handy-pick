@@ -1,6 +1,6 @@
 import AppKit
 
-/// A white menu-bar badge with our simplified scissors-and-photo mark cut out of its alpha.
+/// A white menu-bar badge with our simplified stacked-card mark cut out of its alpha.
 enum MenuBarIcon {
     static let size = NSSize(width: 22, height: 18)
 
@@ -18,49 +18,52 @@ enum MenuBarIcon {
             NSBezierPath(roundedRect: NSRect(x: 1, y: 1, width: 20, height: 16),
                          xRadius: 4, yRadius: 4).fill()
             context.cgContext.setBlendMode(.clear)
-            context.cgContext.translateBy(x: 2, y: 0)
+            context.cgContext.translateBy(x: 11, y: 9)
+            context.cgContext.rotate(by: .pi / 15)
+            context.cgContext.translateBy(x: -11, y: -9)
             drawMark()
             NSGraphicsContext.restoreGraphicsState()
             image.addRepresentation(bitmap)
         }
         image.isTemplate = false
-        image.accessibilityDescription = "Quick Snap"
+        image.accessibilityDescription = "HandyPick"
         return image
     }
 
-    private static func stroke(_ path: NSBezierPath, width: CGFloat) {
-        NSColor.black.setStroke() // The clear blend mode erases alpha instead of painting black.
-        path.lineWidth = width; path.lineCapStyle = .round; path.lineJoinStyle = .round
-        path.stroke()
-    }
-
     private static func drawMark() {
-        // A near-square photo and diagonally overlapping scissors make a compact mark.
-        let photo = NSBezierPath()
-        photo.move(to: NSPoint(x: 7.6, y: 9))
-        photo.line(to: NSPoint(x: 7.6, y: 13.3))
-        photo.curve(to: NSPoint(x: 8.5, y: 14.2), controlPoint1: NSPoint(x: 7.6, y: 13.9), controlPoint2: NSPoint(x: 7.9, y: 14.2))
-        photo.line(to: NSPoint(x: 14.4, y: 14.2))
-        photo.curve(to: NSPoint(x: 15.3, y: 13.3), controlPoint1: NSPoint(x: 15, y: 14.2), controlPoint2: NSPoint(x: 15.3, y: 13.9))
-        photo.line(to: NSPoint(x: 15.3, y: 7.1))
-        photo.curve(to: NSPoint(x: 14.4, y: 6.2), controlPoint1: NSPoint(x: 15.3, y: 6.5), controlPoint2: NSPoint(x: 15, y: 6.2))
-        photo.line(to: NSPoint(x: 12.4, y: 6.2))
-        let mountain = NSBezierPath()
-        mountain.move(to: NSPoint(x: 9.1, y: 11.2))
-        mountain.line(to: NSPoint(x: 10.8, y: 12.6))
-        mountain.line(to: NSPoint(x: 13.4, y: 10.9))
-        let tilt = NSAffineTransform()
-        tilt.translateX(by: 11.45, yBy: 10.2); tilt.rotate(byDegrees: -10)
-        tilt.translateX(by: -11.45, yBy: -10.2)
-        photo.transform(using: tilt as AffineTransform); mountain.transform(using: tilt as AffineTransform)
-        stroke(photo, width: 1.2); stroke(mountain, width: 1.05)
-        for y in [3.0, 7.2] {
-            stroke(NSBezierPath(ovalIn: NSRect(x: 2.6, y: y, width: 3.7, height: 3.2)), width: 1.25)
-        }
-        for (start, end) in [(NSPoint(x: 6, y: 4.6), NSPoint(x: 12.3, y: 10)),
-                             (NSPoint(x: 6, y: 8.8), NSPoint(x: 12.4, y: 4.6))] {
-            let blade = NSBezierPath(); blade.move(to: start); blade.line(to: end)
-            stroke(blade, width: 1.3)
-        }
+        // Preserve the selected artwork's offset back card and lifted corner.
+        // The wide gaps remain distinct at the 22 x 18 menu-bar size.
+        let rear = NSBezierPath()
+        rear.move(to: NSPoint(x: 5, y: 12))
+        rear.line(to: NSPoint(x: 4.5, y: 12))
+        rear.curve(to: NSPoint(x: 3, y: 10.5), controlPoint1: NSPoint(x: 3.5, y: 12), controlPoint2: NSPoint(x: 3, y: 11.5))
+        rear.line(to: NSPoint(x: 3, y: 5))
+        rear.curve(to: NSPoint(x: 4.5, y: 3.5), controlPoint1: NSPoint(x: 3, y: 4), controlPoint2: NSPoint(x: 3.5, y: 3.5))
+        rear.line(to: NSPoint(x: 13, y: 3.5))
+        rear.curve(to: NSPoint(x: 14.5, y: 5), controlPoint1: NSPoint(x: 14, y: 3.5), controlPoint2: NSPoint(x: 14.5, y: 4))
+        rear.line(to: NSPoint(x: 7, y: 5))
+        rear.curve(to: NSPoint(x: 5, y: 7), controlPoint1: NSPoint(x: 5.7, y: 5), controlPoint2: NSPoint(x: 5, y: 5.7))
+        rear.close(); rear.fill()
+
+        let card = NSBezierPath()
+        card.move(to: NSPoint(x: 8, y: 14))
+        card.line(to: NSPoint(x: 13.5, y: 14))
+        card.line(to: NSPoint(x: 13.5, y: 11.5))
+        card.curve(to: NSPoint(x: 15.5, y: 9.5), controlPoint1: NSPoint(x: 13.5, y: 10.2), controlPoint2: NSPoint(x: 14.2, y: 9.5))
+        card.line(to: NSPoint(x: 18.5, y: 9.5))
+        card.line(to: NSPoint(x: 18.5, y: 8))
+        card.curve(to: NSPoint(x: 17, y: 6.5), controlPoint1: NSPoint(x: 18.5, y: 7), controlPoint2: NSPoint(x: 18, y: 6.5))
+        card.line(to: NSPoint(x: 8, y: 6.5))
+        card.curve(to: NSPoint(x: 6.5, y: 8), controlPoint1: NSPoint(x: 7, y: 6.5), controlPoint2: NSPoint(x: 6.5, y: 7))
+        card.line(to: NSPoint(x: 6.5, y: 12.5))
+        card.curve(to: NSPoint(x: 8, y: 14), controlPoint1: NSPoint(x: 6.5, y: 13.5), controlPoint2: NSPoint(x: 7, y: 14))
+        card.close(); card.fill()
+
+        let corner = NSBezierPath()
+        corner.move(to: NSPoint(x: 15, y: 14))
+        corner.line(to: NSPoint(x: 18.5, y: 11))
+        corner.line(to: NSPoint(x: 16.5, y: 11))
+        corner.curve(to: NSPoint(x: 15, y: 12.5), controlPoint1: NSPoint(x: 15.5, y: 11), controlPoint2: NSPoint(x: 15, y: 11.5))
+        corner.close(); corner.fill()
     }
 }

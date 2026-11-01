@@ -3,6 +3,13 @@ import CoreGraphics
 @testable import QuickSnapCore
 
 final class QuickSnapCoreTests: XCTestCase {
+    func testSelectionCopyPreservesWhitespaceAndRejectsCursorOrSecureFields() {
+        XCTAssertTrue(InputPolicy.canCopySelection("你好 👋\nSecond line", secure: false))
+        XCTAssertTrue(InputPolicy.canCopySelection(" \t\n", secure: false))
+        XCTAssertFalse(InputPolicy.canCopySelection("", secure: false))
+        XCTAssertFalse(InputPolicy.canCopySelection(nil, secure: false))
+        XCTAssertFalse(InputPolicy.canCopySelection("password", secure: true))
+    }
     func testShortcutRoundTripPreservesPhysicalKeyAndModifiers() throws {
         for binding in [ShortcutBinding.mouse(2), .mouse(7), .key(40, 1 << 20), .modifier(54)] {
             let data = try JSONEncoder().encode(binding)

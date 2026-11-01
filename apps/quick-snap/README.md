@@ -1,4 +1,4 @@
-# Quick Snap application
+# HandyPick application
 
 Native macOS menu-bar app using SwiftPM. Sources, resources, tests and packaging
 scripts stay together here. The bundle identifier is `studio.deernova.quick-snap`.
@@ -18,4 +18,4 @@ one run quick-snap:pack
 After editing Taskfile.yml, run `one init mise` at the workspace root.
 修改 Taskfile 后，在仓库根目录运行 `one init mise` 同步任务。
 `dev` runs in the foreground; stop the One task to stop that development instance.
-开发实例由 One 管理进程，停止任务即可退出；请先退出其他 Quick Snap 实例，避免重复监听。
+开发实例由 One 管理进程，停止任务即可退出；请先退出其他 HandyPick 实例，避免重复监听。

@@ -7,4 +7,4 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ ! "$build_number" =~ ^[1
   echo 'Invalid version/build number / 版本号或构建号无效' >&2
   exit 2
 fi
-exec bash Scripts/notarize.sh "build/release-candidates/QuickSnap-${version}-build${build_number}/Quick Snap.app"
+exec bash Scripts/notarize.sh "build/release-candidates/HandyPick-${version}-build${build_number}/HandyPick.app"

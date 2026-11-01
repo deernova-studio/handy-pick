@@ -2,7 +2,7 @@ version: '3'
 
 tasks:
   dev:
-    desc: Build and run Quick Snap / 构建并运行 Quick Snap
+    desc: Build and run HandyPick / 构建并运行 HandyPick
     cmds:
       - bash Scripts/dev.sh {{.CLI_ARGS}}
   build:

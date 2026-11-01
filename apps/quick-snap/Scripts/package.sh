@@ -10,11 +10,11 @@ if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || 
 fi
 RELEASE=false
 case "${1:-}" in
-  "") APP="build/distribution-dev/Quick Snap.app" ;;
-  --dev) APP="build/distribution-dev/Quick Snap.app" ;;
+  "") APP="build/distribution-dev/HandyPick.app" ;;
+  --dev) APP="build/distribution-dev/HandyPick.app" ;;
   --release)
     RELEASE=true
-    APP="build/release-candidates/QuickSnap-${VERSION}-build${BUILD_NUMBER}/Quick Snap.app"
+    APP="build/release-candidates/HandyPick-${VERSION}-build${BUILD_NUMBER}/HandyPick.app"
     if [ -e "$APP" ]; then
       echo "发布候选应用已存在：${APP}。请保留该版本，更新版本号后再构建。" >&2
       exit 1
@@ -50,7 +50,7 @@ fi
 mkdir -p "$(dirname "$APP")"
 STAGING=$(mktemp -d "$(dirname "$APP")/.package.XXXXXX")
 trap 'rm -rf "$STAGING"' EXIT
-STAGED_APP="$STAGING/Quick Snap.app"
+STAGED_APP="$STAGING/HandyPick.app"
 mkdir -p "$STAGED_APP/Contents/MacOS" "$STAGED_APP/Contents/Resources"
 cp "$BINARY" "$STAGED_APP/Contents/MacOS/QuickSnap"
 cp Resources/QuickSnap.icns Resources/MenuIcon.png "$STAGED_APP/Contents/Resources/"
@@ -73,7 +73,7 @@ fi
 rm -rf "$APP"
 mv "$STAGED_APP" "$APP"
 if "$RELEASE"; then
-  ditto -c -k --sequesterRsrc --keepParent "$APP" "$(dirname "$APP")/QuickSnap-${VERSION}-macOS-arm64-signed.zip"
+  ditto -c -k --sequesterRsrc --keepParent "$APP" "$(dirname "$APP")/HandyPick-${VERSION}-macOS-arm64-signed.zip"
   echo '正式签名完成；尚未完成 Apple 公证。请运行 Scripts/notarize.sh 后再对外分发。'
 fi
 echo "$APP"

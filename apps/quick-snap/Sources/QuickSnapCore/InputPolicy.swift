@@ -2,6 +2,10 @@ import CoreGraphics
 
 /// Only confirmed editable text controls are eligible for automatic paste.
 public enum InputPolicy {
+    public static func canCopySelection(_ text: String?, secure: Bool) -> Bool {
+        // Whitespace is valid selected content; an insertion cursor is not.
+        !secure && !(text?.isEmpty ?? true)
+    }
     public static func canPaste(role: String, secure: Bool, enabled: Bool?,
                                 editable: Bool?, valueSettable: Bool,
                                 selectedTextSettable: Bool = false,

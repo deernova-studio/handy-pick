@@ -3,6 +3,7 @@ set -euo pipefail
 cd "${0:A:h:h}"
 iconset="$PWD/build/QuickSnap.iconset"
 mkdir -p "$iconset"
+swift Scripts/render-app-icon.swift
 for size in 16 32 128 256 512; do
     sips -z "$size" "$size" Resources/AppIcon.png --out "$iconset/icon_${size}x${size}.png" >/dev/null
     retina=$((size * 2))
