@@ -24,16 +24,22 @@
 
 macOS 14+、Xcode / Swift 5.9+，没有第三方 Swift 依赖。应用位于 `apps/quick-snap`，工作区由 One CLI 管理。
 
-首次准备（需要 Go 1.27.1 构建固定版本的 One）：
+本地使用 One 的开发版：先在包含 Swift 支持的 **One CLI 源码仓库**中，使用已有的 One 命令执行仓库提供的安装任务：
 
 ```sh
-bash scripts/bootstrap-one.sh
-export PATH="$PWD/.cache/one/bin:$PATH"
+one install
+```
+
+该任务构建开发版，并将 `~/.local/bin/one` 链接到源码仓库内的程序。确保 `~/.local/bin` 在 PATH 中，并保留该源码仓库。更新源码后再次执行 `one install` 即可。此命令是 One CLI 仓库的任务，应在该仓库中执行。
+
+回到 Quick Snap 仓库，准备任务工具：
+
+```sh
 one mise trust
 one mise install
 ```
 
-当前固定上游已合并提交 `bc73b921d85e1896044167c0be96a2b8936edf54`，安装脚本校验源码 SHA-256。正式版 v0.1.24 尚不支持 Swift；不要直接用它覆盖此版本。
+云端 runner 不共享本机安装。CI 使用 `scripts/bootstrap-one.sh` 从固定上游提交 `bc73b921d85e1896044167c0be96a2b8936edf54` 构建 One，并校验源码 SHA-256；这是 CI 的准备步骤，本地无需重复运行。正式版 v0.1.24 尚不支持 Swift，需使用包含该功能的开发版或后续正式版。
 
 ```sh
 one run quick-snap:check  # 发布脚本测试、Swift 测试与 Release 编译

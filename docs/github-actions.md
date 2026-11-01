@@ -36,7 +36,7 @@ one run quick-snap:check
 one run quick-snap:pack
 ```
 
-先按仓库 README 安装固定版本 One CLI。CI 同样从固定提交构建 One，通过 `one run` 调用本地相同的检查、签名和公证任务；签名凭据仍由 GitHub Secrets 注入临时钥匙串。
+本地按仓库 README，在 One CLI 源码仓库执行 `one install` 安装开发版。CI 则在独立 runner 上从固定提交构建 One，通过 `one run` 调用本地相同的检查、签名和公证任务；签名凭据仍由 GitHub Secrets 注入临时钥匙串。
 
 本机开发打包输出到 apps/quick-snap/build/distribution-dev，不替换已安装的 Quick Snap，也不修改现有权限。
 
