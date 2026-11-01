@@ -132,14 +132,16 @@ class SigningTests(unittest.TestCase):
 
 
 class SetupTests(unittest.TestCase):
-    def test_uploads_values_only_over_stdin_after_validation(self):
+    def test_retries_upload_without_reprompting_and_uses_only_stdin(self):
         with tempfile.TemporaryDirectory() as d:
             p12 = Path(d) / "identity.p12"
             p12.write_bytes(b"fake-p12")
-            inputs = iter(["y", str(p12), "test@example.invalid", "ABCDEFGHIJ"])
+            inputs = iter(["y", str(p12), "test@example.invalid", "ABCDEFGHIJ", "r"])
             calls = []
             def one(args, **kwargs):
                 calls.append((args, kwargs))
+                if len(calls) == 3:
+                    return subprocess.CompletedProcess(args, 1, '{"error":{"code":"INFISICAL_NETWORK_ERROR"}}', '')
                 return subprocess.CompletedProcess(args, 0, '{"location":{"projectName":"shared-credentials"}}', '')
             output = io.StringIO()
             with patch.object(setup.sys.stdin, "isatty", return_value=True), \
@@ -147,11 +149,12 @@ class SetupTests(unittest.TestCase):
                  patch("builtins.input", side_effect=lambda _: next(inputs)), \
                  patch.object(setup.getpass, "getpass", side_effect=["p12-secret", "notary-secret"]), \
                  patch.object(setup, "run_signed", return_value=0) as validate, \
-                 patch.object(setup.subprocess, "run", side_effect=one), redirect_stdout(output):
+                 patch.object(setup.subprocess, "run", side_effect=one), redirect_stdout(output), redirect_stderr(output):
                 self.assertEqual(setup.main(), 0)
             validate.assert_called_once()
-            self.assertEqual(len(calls), 6)
-            for args, kwargs in calls[1:]:
+            self.assertEqual(len(calls), 8)
+            self.assertEqual(calls[2], calls[3])
+            for args, kwargs in calls[2:]:
                 self.assertIn("--stdin", args)
                 self.assertIn("input", kwargs)
                 self.assertNotIn(kwargs["input"], " ".join(args))
@@ -165,6 +168,23 @@ class SetupTests(unittest.TestCase):
             with self.assertRaises(signing.SigningError):
                 setup.main()
             password.assert_not_called()
+
+    def test_missing_folder_fails_before_password_prompt(self):
+        results = [subprocess.CompletedProcess([], 0, '{"location":{"projectName":"shared-credentials"}}', ''),
+                   subprocess.CompletedProcess([], 1, '{"error":{"code":"INFISICAL_FOLDER_NOT_FOUND","message":"private-data"}}', '')]
+        with patch.object(setup.sys.stdin, "isatty", return_value=True), \
+             patch.object(setup.sys, "platform", "darwin"), \
+             patch.object(setup.subprocess, "run", side_effect=results), \
+             patch.object(setup.getpass, "getpass") as password:
+            with self.assertRaises(signing.SigningError) as caught:
+                setup.main()
+            self.assertIn("INFISICAL_FOLDER_NOT_FOUND", str(caught.exception))
+            self.assertNotIn("private-data", str(caught.exception))
+            password.assert_not_called()
+
+    def test_unknown_error_does_not_print_raw_secret_values(self):
+        result = subprocess.CompletedProcess([], 1, '{"error":{"code":"secret-value","message":"secret-value"}}', 'secret-value')
+        self.assertNotIn("secret-value", setup.safe_error(result))
 
 
 if __name__ == "__main__":

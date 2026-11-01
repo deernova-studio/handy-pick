@@ -5,6 +5,7 @@
 ## 一次性配置
 
 1. 在 https://app.infisical.com 注册账户并创建组织，然后在 Mac 终端运行 `one login`，选择同一组织。One 会创建或找回 `shared-credentials` 项目。
+   首次在共享项目的 Production 环境建立 `apple/macos` 目录。当前 One 的全局写入不会自动创建缺失目录；新设备复用这个已有目录即可，无需再建。
 2. 准备有效的 **Developer ID Application 证书及私钥**（带密码的 P12），以及 Apple App 专用密码。可以创建新证书，也可以复用旧证书；Apple Development 不能替代 Developer ID。
 3. 在 Quick Snap 仓库的本机终端运行 `one run quick-snap:signing-setup`。确认显示的共享凭据库后，输入 P12 路径、导出密码、Apple 账户邮箱、Team ID 和 App 专用密码。密码只在终端隐藏输入，不发到聊天、不写入命令历史。
 4. 导入工具先用临时钥匙串验证证书及 Apple 公证登录，再通过 `one env set --stdin` 写入。也可以在 One Desktop 的 Shared credentials 页面手动配置下面五项。
