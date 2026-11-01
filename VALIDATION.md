@@ -6,7 +6,7 @@
 - 使用用户选定的第一版 image_gen 叠卡片原图（Resources/BrandMark.png），等比生成应用图标；菜单栏用对应的 22×18 白底透明镂空简化图案。已检查应用图标和菜单栏预览。
 - 双击先检测前台应用指针所在文字区域的显式选区，复制为纯文本；无选区时输入区粘贴当前剪贴板，不再用最近截图覆盖；其他位置截图。不读取密码框，不对未知编辑器发送试探性 Cmd-C，不记录选区内容。
 - check 通过 23 项既有 Swift 测试、26 项 Python 测试及 arm64 Release 编译；新增空选区、空白选区和密码框的 Swift 测试单独通过。One 任务配置无漂移。
-- 通过真实 TextEdit 测试文档验证 InputTarget.resolve 返回 copy 且内容匹配测试选区。自动化中键未可靠进入全局监听，实体鼠标的双击复制／粘贴闭环仍待用户确认。
+- 通过真实 TextEdit 测试文档验证 InputTarget.resolve 返回 copy 且内容匹配测试选区。自动化中键未可靠进入全局监听；用户随后使用实体鼠标确认双击复制选中文字、在输入区双击粘贴均成功。
 - One release 成功生成 HandyPick-0.3.0-macOS-arm64.dmg：应用及 DMG 公证 Accepted，附票、Gatekeeper、磁盘镜像完整性验证通过；最终交付文件的签名、票据及 SHA-256 再次校验通过。
 
 ## 2026-11-01 One CLI 正式签名 DMG 实测
