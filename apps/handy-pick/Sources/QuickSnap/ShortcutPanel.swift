@@ -5,6 +5,7 @@ final class ShortcutPanel: NSPanel {
     var onDismiss: (() -> Void)?
     var isRecording: (() -> Bool)?
     private var anchorRect = NSRect.zero
+    private var anchorVisibleFrame: NSRect?
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var activationObserver: NSObjectProtocol?
@@ -36,7 +37,11 @@ final class ShortcutPanel: NSPanel {
 
     func resize(to size: NSSize) {
         let top = frame.maxY
-        setFrame(NSRect(x: frame.minX, y: top-size.height, width: size.width, height: size.height), display: true, animate: false)
+        var x = frame.midX - size.width / 2
+        if isVisible, let visible = anchorVisibleFrame {
+            x = min(max(anchorRect.midX - size.width / 2, visible.minX + 6), visible.maxX - size.width - 6)
+        }
+        setFrame(NSRect(x: x, y: top-size.height, width: size.width, height: size.height), display: true, animate: false)
     }
 
     func show(below button: NSStatusBarButton) {
@@ -44,6 +49,7 @@ final class ShortcutPanel: NSPanel {
         anchorRect = window.convertToScreen(button.convert(button.bounds, to: nil))
         let screen = window.screen ?? NSScreen.main
         let visible = screen?.visibleFrame ?? anchorRect
+        anchorVisibleFrame = visible
         let x = min(max(anchorRect.midX - frame.width / 2, visible.minX + 6), visible.maxX - frame.width - 6)
         setFrameOrigin(NSPoint(x: x, y: anchorRect.minY - frame.height - 6))
         makeKeyAndOrderFront(nil)

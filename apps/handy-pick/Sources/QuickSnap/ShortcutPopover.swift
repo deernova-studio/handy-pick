@@ -16,12 +16,12 @@ final class ShortcutPopover: NSViewController {
     private var needsPermission = false
 
     override func loadView() {
-        let root = PaperlightSurface(frame: NSRect(x: 0, y: 0, width: 400, height: 392))
+        let root = PaperlightSurface(frame: NSRect(x: 0, y: 0, width: 360, height: 392))
         let caption = NSTextField(labelWithString: "设置")
         caption.frame = NSRect(x: 16, y: 18, width: 50, height: 18)
         caption.font = Paperlight.label; caption.textColor = Paperlight.ink
         root.addSubview(caption)
-        bindingButton.frame = NSRect(x: 184, y: 16, width: 200, height: 24)
+        bindingButton.frame = NSRect(x: 184, y: 16, width: 160, height: 24)
         bindingButton.target = self; bindingButton.action = #selector(record)
         bindingButton.font = Paperlight.label
         bindingButton.style = .secondary; bindingButton.isBordered = false
@@ -29,9 +29,9 @@ final class ShortcutPopover: NSViewController {
         bindingButton.setAccessibilityLabel("设置双击快捷键")
         bindingButton.toolTip = "点击后按新键，Esc 取消"
         root.addSubview(bindingButton)
-        separator.frame = NSRect(x: 16, y: 55, width: 368, height: Paperlight.hairline(root))
+        separator.frame = NSRect(x: 16, y: 55, width: 328, height: Paperlight.hairline(root))
         separator.fill = Paperlight.line; root.addSubview(separator)
-        scroll.frame = NSRect(x: 16, y: 64, width: 368, height: 312)
+        scroll.frame = NSRect(x: 16, y: 64, width: 328, height: 312)
         scroll.scrollerStyle = .overlay
         scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
         scroll.documentView = grid; root.addSubview(scroll)
@@ -49,10 +49,11 @@ final class ShortcutPopover: NSViewController {
     func updateHistory(_ entries: [ClipboardHistory.Entry]) {
         loadViewIfNeeded()
         grid.subviews.forEach { $0.removeFromSuperview() }
-        grid.frame = NSRect(x: 0, y: 0, width: 368, height: max(312, CGFloat((entries.count + 2) / 3) * 120))
+        grid.frame = NSRect(x: 0, y: 0, width: 328, height: max(312, CGFloat((entries.count + 2) / 3) * 120))
         scroll.isHidden = entries.isEmpty
         separator.isHidden = entries.isEmpty
-        let size = NSSize(width: 400, height: entries.isEmpty ? 56 : 392)
+        let size = NSSize(width: entries.isEmpty ? 240 : 360, height: entries.isEmpty ? 56 : 392)
+        bindingButton.setFrameOrigin(NSPoint(x: size.width - 176, y: 16))
         if preferredContentSize != size {
             preferredContentSize = size
             onSizeChange?(size)
@@ -60,7 +61,7 @@ final class ShortcutPopover: NSViewController {
         }
         for (index, entry) in entries.enumerated() {
             let tile = HistoryTile(entry: entry)
-            let width: CGFloat = 117.333333
+            let width: CGFloat = 104
             tile.frame = NSRect(x: CGFloat(index % 3) * (width + 8), y: CGFloat(index / 3) * 120, width: width, height: 112)
             tile.onSelect = { [weak self] in self?.onSelect?(entry.id) }
             tile.onRemove = { [weak self] in self?.onRemove?(entry.id) }
