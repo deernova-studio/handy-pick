@@ -35,7 +35,7 @@ enum CaptureFailure: LocalizedError {
             config.height = Int(screen.frame.height * screen.backingScaleFactor)
             config.showsCursor = false
             config.captureResolution = .best
-            config.ignoreShadowsDisplay = true
+            config.ignoreShadowsDisplay = false
             let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
             result.append(ScreenFrame(screen: screen, image: image))
         }
@@ -52,6 +52,8 @@ enum CaptureFailure: LocalizedError {
             panel.level = .screenSaver
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isReleasedWhenClosed = false
+            panel.animationBehavior = .none
+            panel.setFrame(frame.screen.frame, display: false)
             panel.isOpaque = true
             panel.backgroundColor = .black
             panel.hasShadow = false
@@ -59,8 +61,10 @@ enum CaptureFailure: LocalizedError {
             view.onComplete = { [weak self] image in self?.finish(image) }
             panel.contentView = view
             panels.append(panel)
-            panel.orderFrontRegardless()
+            panel.displayIfNeeded()
         }
+        // Prepare every display before showing any overlay; never animate or constrain it to the work area.
+        panels.forEach { $0.orderFrontRegardless() }
         let mouse = NSEvent.mouseLocation
         if let panel = panels.first(where: { $0.frame.contains(mouse) }) ?? panels.first {
             panel.makeKey(); panel.makeFirstResponder(panel.contentView)
@@ -83,57 +87,5 @@ enum CaptureFailure: LocalizedError {
 final class SelectionPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
-}
-
-final class SelectionView: NSView {
-    let image: CGImage
-    var onComplete: ((CGImage?) -> Void)?
-    private var start: CGPoint?
-    private var selection: CGRect = .zero
-    override var isFlipped: Bool { true }
-    override var acceptsFirstResponder: Bool { true }
-
-    init(image: CGImage) { self.image = image; super.init(frame: .zero) }
-    required init?(coder: NSCoder) { fatalError("Not supported") }
-
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .crosshair) }
-    override func draw(_ dirtyRect: NSRect) {
-        let picture = NSImage(cgImage: image, size: bounds.size)
-        picture.draw(in: bounds, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
-        NSColor.black.withAlphaComponent(0.42).setFill(); bounds.fill()
-        if selection.width > 0, selection.height > 0 {
-            NSGraphicsContext.saveGraphicsState()
-            NSBezierPath(rect: selection).addClip()
-            picture.draw(in: bounds, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
-            NSGraphicsContext.restoreGraphicsState()
-            NSColor.white.setStroke()
-            let outline = NSBezierPath(rect: selection); outline.lineWidth = 1; outline.stroke()
-            let text = "\(Int(selection.width)) × \(Int(selection.height))"
-            (text as NSString).draw(at: CGPoint(x: selection.minX+6, y: max(6, selection.minY-26)),
-                withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 14, weight: .medium), .foregroundColor: NSColor.white])
-        }
-    }
-    override func mouseDown(with event: NSEvent) {
-        window?.makeKey(); window?.makeFirstResponder(self)
-        start = convert(event.locationInWindow, from: nil)
-        selection = .zero; needsDisplay = true
-    }
-    override func mouseDragged(with event: NSEvent) {
-        guard let start else { return }
-        selection = SelectionGeometry.selection(from: start, to: convert(event.locationInWindow, from: nil), in: bounds)
-        needsDisplay = true
-    }
-    override func mouseUp(with event: NSEvent) {
-        guard let start else { return }
-        self.start = nil
-        selection = SelectionGeometry.selection(from: start, to: convert(event.locationInWindow, from: nil), in: bounds)
-        guard let pixels = SelectionGeometry.pixels(for: selection, logicalSize: bounds.size,
-                 pixelSize: CGSize(width: image.width, height: image.height)),
-              let cropped = image.cropping(to: pixels) else { selection = .zero; needsDisplay = true; return }
-        onComplete?(cropped)
-    }
-    override func rightMouseDown(with event: NSEvent) { onComplete?(nil) }
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { onComplete?(nil) } else { super.keyDown(with: event) }
-    }
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 }

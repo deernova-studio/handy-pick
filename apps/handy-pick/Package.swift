@@ -8,6 +8,7 @@ let package = Package(
     targets: [
         .target(name: "QuickSnapCore"),
         .executableTarget(name: "QuickSnap", dependencies: ["QuickSnapCore"]),
-        .testTarget(name: "QuickSnapCoreTests", dependencies: ["QuickSnapCore"])
+        .testTarget(name: "QuickSnapCoreTests", dependencies: ["QuickSnapCore"]),
+        .testTarget(name: "QuickSnapDesktopTests", dependencies: ["QuickSnap", "QuickSnapCore"])
     ]
 )

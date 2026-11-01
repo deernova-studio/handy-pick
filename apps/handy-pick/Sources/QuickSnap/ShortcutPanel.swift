@@ -20,7 +20,7 @@ final class ShortcutPanel: NSPanel {
         level = .popUpMenu; hidesOnDeactivate = false
         collectionBehavior = [.transient, .fullScreenAuxiliary, .moveToActiveSpace]
         animationBehavior = .utilityWindow
-        title = "Quick Snap"
+        title = "HandyPick"
 
         editor.loadViewIfNeeded()
         let background = NSVisualEffectView(frame: NSRect(origin: .zero, size: editor.preferredContentSize))

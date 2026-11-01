@@ -1,5 +1,14 @@
 # 验证记录
 
+## 2026-11-01 HandyPick 0.4.0 build 22
+
+- 截图保留桌面窗口阴影；全屏遮罩禁用窗口动画和工作区边界约束，所有屏幕先准备绘制再显示。进入截图的实体鼠标体感仍待用户确认。
+- 框选后原地显示划线、椭圆、文字、撤销、取消、复制工具条。回车确认复制、⌘Z 撤销；文字输入时回车结束编辑。标注按原截图像素比例合成，不包含遮罩、选框和工具条。
+- 菜单栏面板第一行为快捷键设置，下方三列图片／文字网格。运行期间轮询系统剪贴板，点击卡片重新复制；右键删除单条或清空。只保存在内存，启动不导入旧剪贴板，重启清空；最多 60 项／64 MiB，忽略敏感和临时粘贴板标记。
+- One check 通过 34 项 Swift 测试、26 项 Python 测试及 arm64 Release 编译。新增覆盖历史去重与淘汰、删除和清空、独立剪贴板回选与隐私标记、Retina 标注位置、文字与椭圆渲染、选区等待确认、卡片选择回调；使用非敏感测试图检查实际视图渲染。
+- One release 已通过应用与 DMG 的 Developer ID 签名、Apple 公证、附票、Gatekeeper 与镜像验证。已更新 /Applications/HandyPick.app 并启动 0.4.0，单实例事件监听启用；旧版保留于 build/previous-installed-0.3.5.app。
+- 本次 DMG：apps/handy-pick/build/releases/HandyPick-0.4.0-build22/HandyPick-0.4.0-macOS-arm64.dmg。没有上传新的 GitHub Release。
+
 ## 2026-11-01 handy-pick 仓库与工作区更名
 
 - 本地根目录改为 /Users/srx/projects/handy-pick，应用目录改为 apps/handy-pick；GitHub 改为 deernova-studio/handy-pick，保留私有状态、仓库 ID 与 v0.3.5 的已发布附件。

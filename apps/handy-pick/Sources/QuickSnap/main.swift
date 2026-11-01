@@ -10,6 +10,7 @@ import OSLog
     private let trigger = ShortcutTrigger()
     private let capture = CaptureController()
     private let copyFeedback = CopyFeedback()
+    private let clipboard = ClipboardMonitor()
     private var recentImage: NSImage?
     private var preparing = false
     private var message = ""
@@ -44,6 +45,14 @@ import OSLog
             self?.trigger.cancelRecording(); self?.refresh()
         }
         shortcutPanel.isRecording = { [weak self] in self?.trigger.recording ?? false }
+        clipboard.onChange = { [weak self] entries in self?.panel.updateHistory(entries) }
+        panel.onSelect = { [weak self] id in
+            guard let self else { return }
+            if self.clipboard.select(id) { self.shortcutPanel.dismiss(); self.copyFeedback.show() }
+        }
+        panel.onRemove = { [weak self] id in self?.clipboard.remove(id) }
+        panel.onClear = { [weak self] in self?.clipboard.clear() }
+        clipboard.start()
         panel.onRecord = { [weak self] in self?.beginRecording() }
         panel.onPermission = { [weak self] in self?.requestPermission() }
         trigger.onAction = { [weak self] in self?.handleDoubleClick($0) }
@@ -110,6 +119,7 @@ import OSLog
         add("更换快捷键…", #selector(openRecorder), to: menu)
         add("开始截图", #selector(startFromMenu), to: menu)
         let copy = add("复制最近截图", #selector(copyRecent), to: menu); copy.isEnabled = recentImage != nil
+        add("清空剪贴板记录", #selector(clearHistory), to: menu)
         add(trigger.running ? "暂停" : "启用", #selector(toggle), to: menu)
         if !permissionsReady { add("授予权限…", #selector(requestPermission), to: menu) }
         menu.addItem(.separator()); add("退出 HandyPick", #selector(quit), to: menu)
@@ -118,6 +128,7 @@ import OSLog
     @discardableResult private func add(_ title: String, _ action: Selector, to menu: NSMenu) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: ""); item.target = self; menu.addItem(item); return item
     }
+    @objc private func clearHistory() { clipboard.clear() }
     @objc private func openRecorder() { DispatchQueue.main.async { self.togglePopover() } }
 
     @objc private func startFromMenu() {
@@ -165,6 +176,7 @@ import OSLog
                 self.preparing = false
                 NSPasteboard.general.clearContents()
                 if NSPasteboard.general.setString(text, forType: .string) {
+                    self.clipboard.poll()
                     self.recordGestureOutcome("selected-text-copied")
                     self.inform("已复制选中文字")
                     self.copyFeedback.show()
@@ -202,6 +214,7 @@ import OSLog
         NSPasteboard.general.clearContents()
         guard NSPasteboard.general.setData(png, forType: .png) else { inform("复制失败，请重试"); return }
         if let tiff = recentImage.tiffRepresentation { NSPasteboard.general.setData(tiff, forType: .tiff) }
+        clipboard.poll()
         copyFeedback.show()
     }
     private func paste(to pid: Int32) {
@@ -232,7 +245,7 @@ import OSLog
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(section)") { NSWorkspace.shared.open(url) }
     }
     @objc private func quit() { trigger.stop(); capture.cancel(); NSApp.terminate(nil) }
-    func applicationWillTerminate(_ notification: Notification) { trigger.stop() }
+    func applicationWillTerminate(_ notification: Notification) { trigger.stop(); clipboard.stop(); clipboard.clear() }
 }
 
 MainActor.assumeIsolated {
