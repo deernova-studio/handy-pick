@@ -1,4 +1,4 @@
 HandyPick icon: first image selected by the user, generated with built-in image_gen.
 Source: BrandMark.png (retained unchanged).
 Prompt: Pure black emblem on white, two compact overlapping cards with a lifted front corner; bold sculptural shapes and white negative-space cuts, subtle asymmetry, no text, gradients or shadows.
-AppIcon.png is an aspect-preserving square rendition. MenuBarIcon.swift is the small-size vector adaptation on a white 22x18 badge.
+AppIcon.png fits the unchanged artwork into an 824x824 rounded white tile (184px radius) on a transparent 1024x1024 canvas, retaining 100px outer margins for legacy macOS .icns display. All iconset sizes preserve alpha. MenuBarIcon.swift is the small-size vector adaptation on a white 22x18 badge.

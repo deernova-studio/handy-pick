@@ -11,21 +11,28 @@ import OSLog
     private let capture = CaptureController()
     private let copyFeedback = CopyFeedback()
     private let clipboard = ClipboardMonitor()
+    private let historyPreview = HistoryPreview()
     private var recentImage: NSImage?
     private var preparing = false
     private var message = ""
     private let gestureLog = Logger(subsystem: "studio.deernova.quick-snap", category: "gesture")
+    private var shortcutMode: ShortcutMode {
+        get { ShortcutMode(rawValue: UserDefaults.standard.string(forKey: "shortcutMode") ?? "") ?? .doublePress }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "shortcutMode") }
+    }
     private var binding: ShortcutBinding {
         get {
-            if let data = UserDefaults.standard.data(forKey: "shortcutBinding"),
-               let value = try? JSONDecoder().decode(ShortcutBinding.self, from: data), value.isValid { return value }
+            let key = shortcutMode == .chord ? "chordBinding" : "shortcutBinding"
+            if let data = UserDefaults.standard.data(forKey: key),
+               let value = try? JSONDecoder().decode(ShortcutBinding.self, from: data), shortcutMode.accepts(value) { return value }
+            if shortcutMode == .chord { return .key(35, (1 << 18) | (1 << 19)) } // ⌃⌥P
             let old = UserDefaults.standard.object(forKey: "triggerButton") as? Int ?? 2
             let fallback = ShortcutBinding.mouse(Int64(old))
             return fallback.isValid ? fallback : .mouse(2)
         }
         set {
-            guard newValue.isValid, let data = try? JSONEncoder().encode(newValue) else { return }
-            UserDefaults.standard.set(data, forKey: "shortcutBinding")
+            guard shortcutMode.accepts(newValue), let data = try? JSONEncoder().encode(newValue) else { return }
+            UserDefaults.standard.set(data, forKey: shortcutMode == .chord ? "chordBinding" : "shortcutBinding")
         }
     }
     private var monitoringWanted: Bool {
@@ -46,7 +53,20 @@ import OSLog
         }
         shortcutPanel.isRecording = { [weak self] in self?.trigger.recording ?? false }
         panel.onSizeChange = { [weak self] size in self?.shortcutPanel.resize(to: size) }
-        clipboard.onChange = { [weak self] entries in self?.panel.updateHistory(entries) }
+        clipboard.onChange = { [weak self] entries in
+            self?.panel.updateHistory(entries)
+            self?.historyPreview.retainOnly(Set(entries.map(\.id)))
+        }
+        historyPreview.onDismiss = { [weak self] in
+            guard let self else { return }
+            self.trigger.suspended = self.capture.active || self.preparing
+        }
+        panel.onPreview = { [weak self] id in
+            guard let self, let entry = self.clipboard.history.entries.first(where: { $0.id == id }) else { return }
+            self.shortcutPanel.dismiss()
+            self.historyPreview.show(entry)
+            self.trigger.suspended = true
+        }
         panel.onSelect = { [weak self] id in
             guard let self else { return }
             if self.clipboard.select(id) { self.shortcutPanel.dismiss(); self.copyFeedback.show() }
@@ -55,13 +75,18 @@ import OSLog
         panel.onClear = { [weak self] in self?.clipboard.clear() }
         clipboard.start()
         panel.onRecord = { [weak self] in self?.beginRecording() }
+        panel.onModeChange = { [weak self] mode in
+            guard let self else { return }
+            self.shortcutMode = mode
+            self.startMonitoring()
+        }
         panel.onPermission = { [weak self] in self?.requestPermission() }
-        trigger.onAction = { [weak self] in self?.handleDoubleClick($0) }
+        trigger.onAction = { [weak self] in self?.handleShortcut($0) }
         trigger.onRecorded = { [weak self] value in
             guard let self else { return }
             if let value { self.binding = value }
             self.startMonitoring()
-            if value != nil { self.inform("已保存 · 双击触发") }
+            if value != nil { self.inform("已保存") }
         }
         startMonitoring()
     }
@@ -77,14 +102,15 @@ import OSLog
 
     private func togglePopover() {
         if shortcutPanel.isVisible { shortcutPanel.dismiss(); return }
+        historyPreview.dismiss()
         guard let button = status.button else { return }
         refresh()
         shortcutPanel.show(below: button)
     }
 
     private func refresh() {
-        status.button?.toolTip = "\(AppIdentity.displayName) · 双击\(binding.displayName)复制 / 粘贴 / 截图\n\(message)"
-        panel.update(binding: binding.displayName, recording: trigger.recording, needsPermission: !permissionsReady)
+        status.button?.toolTip = "\(AppIdentity.displayName) · \(shortcutMode == .doublePress ? "双击" : "按下")\(binding.displayName)复制 / 粘贴 / 截图\n\(message)"
+        panel.update(binding: binding.displayName, recording: trigger.recording, needsPermission: !permissionsReady, mode: shortcutMode)
     }
     private func inform(_ text: String) { message = text; refresh() }
 
@@ -96,7 +122,8 @@ import OSLog
     }
 
     private func startMonitoring() {
-        trigger.stop(); trigger.binding = binding
+        trigger.stop(); trigger.mode = shortcutMode; trigger.binding = binding
+        trigger.suspended = historyPreview.window != nil
         guard permissionsReady else { inform("需要屏幕录制和辅助功能权限"); return }
         guard monitoringWanted else { inform("已暂停"); return }
         inform(trigger.start(active: true) ? "已启用" : "无法监听，请检查辅助功能权限")
@@ -115,7 +142,7 @@ import OSLog
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(withTitle: "双击\(binding.displayName)", action: nil, keyEquivalent: "")
+        menu.addItem(withTitle: "\(shortcutMode == .doublePress ? "双击" : "按下")\(binding.displayName)", action: nil, keyEquivalent: "")
         menu.addItem(.separator())
         add("更换快捷键…", #selector(openRecorder), to: menu)
         add("开始截图", #selector(startFromMenu), to: menu)
@@ -133,6 +160,7 @@ import OSLog
     @objc private func openRecorder() { DispatchQueue.main.async { self.togglePopover() } }
 
     @objc private func startFromMenu() {
+        historyPreview.dismiss()
         shortcutPanel.dismiss()
         DispatchQueue.main.asyncAfter(deadline: .now()+0.15) { self.beginCapture() }
     }
@@ -156,7 +184,7 @@ import OSLog
             } catch { trigger.suspended = false; inform("截图失败：\(error.localizedDescription)") }
         }
     }
-    private func handleDoubleClick(_ gesture: ClickRecognizer.Gesture) {
+    private func handleShortcut(_ gesture: ClickRecognizer.Gesture) {
         guard trigger.running, !capture.active, !preparing else { return }
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == gesture.target else {
             recordGestureOutcome("foreground-changed")
@@ -205,7 +233,7 @@ import OSLog
                 if input.isFocused() { self.paste(to: input.pid); return }
             }
             self.recordGestureOutcome("input-found-focus-unconfirmed")
-            self.inform("请先点入输入框再双击")
+            self.inform("请先点入输入框再使用快捷键")
         }
     }
 
@@ -246,7 +274,7 @@ import OSLog
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(section)") { NSWorkspace.shared.open(url) }
     }
     @objc private func quit() { trigger.stop(); capture.cancel(); NSApp.terminate(nil) }
-    func applicationWillTerminate(_ notification: Notification) { trigger.stop(); clipboard.stop(); clipboard.clear() }
+    func applicationWillTerminate(_ notification: Notification) { trigger.stop(); historyPreview.dismiss(); clipboard.stop(); clipboard.clear() }
 }
 
 MainActor.assumeIsolated {

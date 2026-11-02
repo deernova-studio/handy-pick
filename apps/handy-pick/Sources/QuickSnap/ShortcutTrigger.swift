@@ -6,6 +6,7 @@ import QuickSnapCore
 final class ShortcutTrigger {
     static let syntheticEventTag: Int64 = 0x51534E4150
     var binding: ShortcutBinding = .mouse(2)
+    var mode: ShortcutMode = .doublePress
     var onAction: ((ClickRecognizer.Gesture) -> Void)?
     var onRecorded: ((ShortcutBinding?) -> Void)?
     var suspended = false
@@ -16,7 +17,7 @@ final class ShortcutTrigger {
     private var localMonitor: Any?
     private var activationObserver: NSObjectProtocol?
     private var frontmostPID: Int32 = 0
-    private var recognizer = ClickRecognizer(interval: NSEvent.doubleClickInterval)
+    private var recognizer = ShortcutRecognizer(interval: NSEvent.doubleClickInterval)
     private var origin: CGPoint?
     private var keyGate = KeyPressGate()
     private var heldModifiers: Set<UInt16> = []
@@ -93,15 +94,19 @@ final class ShortcutTrigger {
         if recording {
             if type == .otherMouseDown {
                 let value = ShortcutBinding.mouse(event.getIntegerValueField(.mouseEventButtonNumber))
-                if value.isValid { record(value); return true }
+                if mode.accepts(value) { record(value) }
+                return true
             } else if type == .keyDown {
                 if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return true }
                 if code == 53 { record(nil); return true }
                 let value = ShortcutBinding.key(code, flags & ShortcutBinding.modifierMask)
-                if value.isValid { record(value); return true }
+                if mode.accepts(value) { record(value) }
+                return true
             } else if type == .flagsChanged, ShortcutBinding.isModifier(code) {
-                if modifierDown { modifierCandidate = code; if code == 57 { record(.modifier(code)) } }
-                else if modifierCandidate == code { record(.modifier(code)) }
+                if mode == .doublePress {
+                    if modifierDown { modifierCandidate = code; if code == 57 { record(.modifier(code)) } }
+                    else if modifierCandidate == code { record(.modifier(code)) }
+                }
                 // Modifier state continues to flow to the OS so it can never become stuck.
             }
             return false
@@ -109,7 +114,7 @@ final class ShortcutTrigger {
         // Pair releases even while the screenshot overlay temporarily suspends shortcuts.
         if type == .keyUp { return keyGate.up(code: code) == .consume }
         if type == .keyDown, let held = keyGate.heldResult(code: code) { return held == .consume }
-        guard active, !suspended else { return false }
+        guard active, !suspended, mode.accepts(binding) else { return false }
         switch binding {
         case .mouse(let selected):
             guard [.otherMouseDown, .otherMouseUp, .otherMouseDragged].contains(type),
@@ -136,7 +141,7 @@ final class ShortcutTrigger {
     }
 
     private func press(at point: CGPoint, keyboard: Bool) {
-        guard let gesture = recognizer.press(at: ProcessInfo.processInfo.systemUptime, point: point, target: frontmostPID) else { return }
+        guard let gesture = recognizer.press(mode: mode, at: ProcessInfo.processInfo.systemUptime, point: point, target: frontmostPID) else { return }
         let token = generation
         DispatchQueue.main.async { [weak self] in
             guard let self, self.running, !self.recording, !self.suspended, self.generation == token else { return }

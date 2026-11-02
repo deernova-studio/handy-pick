@@ -8,25 +8,30 @@ final class ShortcutPopover: NSViewController {
     var onSelect: ((UUID) -> Void)?
     var onRemove: ((UUID) -> Void)?
     var onClear: (() -> Void)?
+    var onPreview: ((UUID) -> Void)?
+    var onModeChange: ((ShortcutMode) -> Void)?
     var onSizeChange: ((NSSize) -> Void)?
     private let scroll = NSScrollView()
     private let separator = PaperlightSurface()
     private let bindingButton = PaperlightButton(title: "", target: nil, action: nil)
+    private let modeButton = NSPopUpButton(frame: .zero, pullsDown: false)
     private let grid = FlippedHistoryView()
     private var needsPermission = false
 
     override func loadView() {
         let root = PaperlightSurface(frame: NSRect(x: 0, y: 0, width: 360, height: 392))
-        let caption = NSTextField(labelWithString: "设置")
-        caption.frame = NSRect(x: 16, y: 18, width: 50, height: 18)
-        caption.font = Paperlight.label; caption.textColor = Paperlight.ink
-        root.addSubview(caption)
+        modeButton.frame = NSRect(x: 12, y: 14, width: 88, height: 28)
+        modeButton.addItems(withTitles: ["双击", "组合键"])
+        modeButton.font = Paperlight.label
+        modeButton.target = self; modeButton.action = #selector(selectTriggerMode)
+        modeButton.setAccessibilityLabel("触发方式")
+        root.addSubview(modeButton)
         bindingButton.frame = NSRect(x: 184, y: 16, width: 160, height: 24)
         bindingButton.target = self; bindingButton.action = #selector(record)
         bindingButton.font = Paperlight.label
         bindingButton.style = .secondary; bindingButton.isBordered = false
         bindingButton.bezelStyle = .rounded
-        bindingButton.setAccessibilityLabel("设置双击快捷键")
+        bindingButton.setAccessibilityLabel("录入快捷键")
         bindingButton.toolTip = "点击后按新键，Esc 取消"
         root.addSubview(bindingButton)
         separator.frame = NSRect(x: 16, y: 55, width: 328, height: Paperlight.hairline(root))
@@ -42,9 +47,11 @@ final class ShortcutPopover: NSViewController {
         updateHistory([])
     }
 
-    func update(binding: String, recording: Bool, needsPermission: Bool) {
+    func update(binding: String, recording: Bool, needsPermission: Bool, mode: ShortcutMode = .doublePress) {
         loadViewIfNeeded(); self.needsPermission = needsPermission
-        bindingButton.title = needsPermission ? "授权…" : (recording ? "请按新键…" : "双击 · \(binding)")
+        modeButton.selectItem(at: mode == .doublePress ? 0 : 1)
+        bindingButton.title = needsPermission ? "授权…" : (recording ? (mode == .chord ? "请按组合键…" : "请按新键…") : binding)
+        bindingButton.toolTip = mode == .chord ? "按住 ⌘、⌃ 或 ⌥ 再按一个键；一次触发，Esc 取消" : "点击后按新键，双击触发；Esc 取消"
     }
     func updateHistory(_ entries: [ClipboardHistory.Entry]) {
         loadViewIfNeeded()
@@ -61,7 +68,7 @@ final class ShortcutPopover: NSViewController {
         scroll.isHidden = entries.isEmpty
         separator.isHidden = entries.isEmpty
         let size = NSSize(width: entries.isEmpty ? 240 : 360, height: entries.isEmpty ? 56 : 64 + visibleHeight + 16)
-        bindingButton.setFrameOrigin(NSPoint(x: size.width - 176, y: 16))
+        bindingButton.frame = NSRect(x: 104, y: 16, width: size.width - 120, height: 24)
         if preferredContentSize != size {
             preferredContentSize = size
             onSizeChange?(size)
@@ -74,19 +81,23 @@ final class ShortcutPopover: NSViewController {
             tile.onSelect = { [weak self] in self?.onSelect?(entry.id) }
             tile.onRemove = { [weak self] in self?.onRemove?(entry.id) }
             tile.onClear = { [weak self] in self?.onClear?() }
+            tile.onPreview = { [weak self] in self?.onPreview?(entry.id) }
             grid.addSubview(tile)
         }
     }
     @objc private func clearHistory() { onClear?() }
     @objc private func record() { if needsPermission { onPermission?() } else { onRecord?() } }
+    @objc private func selectTriggerMode() { onModeChange?(modeButton.indexOfSelectedItem == 1 ? .chord : .doublePress) }
 }
 
 private final class FlippedHistoryView: NSView { override var isFlipped: Bool { true } }
 
-private final class HistoryTile: PaperlightButton {
+final class HistoryTile: PaperlightButton {
     var onSelect: (() -> Void)?
     var onRemove: (() -> Void)?
     var onClear: (() -> Void)?
+    var onPreview: (() -> Void)?
+    private let expandButton = PaperlightButton(title: "", target: nil, action: nil)
     private let entry: ClipboardHistory.Entry
     private var preview: NSImage?
     init(entry: ClipboardHistory.Entry) {
@@ -103,13 +114,30 @@ private final class HistoryTile: PaperlightButton {
             }
             setAccessibilityLabel("复制图片")
         } else { setAccessibilityLabel("复制文字记录") }
+        expandButton.image = NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: "放大预览")
+        expandButton.setAccessibilityLabel("放大预览")
+        expandButton.toolTip = "放大预览"
+        expandButton.style = .secondary; expandButton.isBordered = false
+        expandButton.target = self; expandButton.action = #selector(expand)
+        expandButton.isHidden = true
+        addSubview(expandButton)
         let menu = NSMenu()
-        for (title, selector) in [("删除这条", #selector(removeEntry)), ("清空记录", #selector(clearEntries))] {
+        for (title, selector) in [("放大预览", #selector(expand)), ("删除这条", #selector(removeEntry)), ("清空记录", #selector(clearEntries))] {
             let item = NSMenuItem(title: title, action: selector, keyEquivalent: ""); item.target = self; menu.addItem(item)
         }
         self.menu = menu
     }
     required init?(coder: NSCoder) { fatalError("Not supported") }
+    override func layout() {
+        super.layout()
+        expandButton.frame = NSRect(x: bounds.width-32, y: isFlipped ? 6 : bounds.height-32, width: 26, height: 26)
+    }
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event); expandButton.isHidden = false
+    }
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event); expandButton.isHidden = true
+    }
     override func draw(_ dirtyRect: NSRect) {
         let card = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 8, yRadius: 8)
         Paperlight.surface.setFill(); card.fill()
@@ -133,6 +161,7 @@ private final class HistoryTile: PaperlightButton {
     }
 
     @objc private func choose() { onSelect?() }
+    @objc private func expand() { onPreview?() }
     @objc private func removeEntry() { onRemove?() }
     @objc private func clearEntries() { onClear?() }
 }

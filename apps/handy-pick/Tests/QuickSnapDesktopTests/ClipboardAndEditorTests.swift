@@ -112,6 +112,66 @@ final class ClipboardAndEditorTests: XCTestCase {
         XCTAssertEqual(panel.preferredContentSize, NSSize(width: 240, height: 56))
         savePreview(panel.view, "clipboard-empty-dark.png")
     }
+    @MainActor func testPreviewButtonDoesNotCopyAndHoverRevealsIt() {
+        _ = NSApplication.shared
+        var history = ClipboardHistory(); history.insert(.text("Preview without changing clipboard"))
+        let panel = ShortcutPopover(); panel.updateHistory(history.entries)
+        let scroll = panel.view.subviews.compactMap { $0 as? NSScrollView }.first!
+        let tile = scroll.documentView!.subviews.first as! HistoryTile
+        let expand = tile.subviews.compactMap { $0 as? NSButton }.first!
+        var copied = false; var previewed: UUID?
+        panel.onSelect = { _ in copied = true }; panel.onPreview = { previewed = $0 }
+        XCTAssertTrue(expand.isHidden)
+        tile.mouseEntered(with: mouse(.mouseMoved, x: 50, y: 50))
+        XCTAssertFalse(expand.isHidden)
+        tile.layoutSubtreeIfNeeded()
+        let hit = tile.hitTest(NSPoint(x: tile.frame.minX+expand.frame.midX, y: tile.frame.minY+expand.frame.midY))
+        XCTAssertTrue(hit === expand, "Preview button must receive mouse clicks instead of the copy action")
+        expand.performClick(nil)
+        XCTAssertFalse(copied); XCTAssertEqual(previewed, history.entries[0].id)
+        savePreview(panel.view, "clipboard-hover-preview.png")
+        tile.mouseExited(with: mouse(.mouseMoved, x: 150, y: 150))
+        XCTAssertTrue(expand.isHidden)
+        tile.performClick(nil); XCTAssertTrue(copied)
+    }
+    @MainActor func testPreviewPreservesFullTextAndOriginalImageAndClearsOnHistoryRemoval() {
+        _ = NSApplication.shared
+        let text = String(repeating: "完整文字预览，支持滚动。\n", count: 200)
+        let size = NSSize(width: 640, height: 480)
+        let root = HistoryPreview.contentView(for: .text(text), size: size)
+        let scroll = root.subviews.first as! NSScrollView
+        let editor = scroll.documentView as! NSTextView
+        XCTAssertEqual(editor.string, text); XCTAssertFalse(editor.isEditable); XCTAssertTrue(editor.isSelectable)
+        let png = NSBitmapImageRep(cgImage: fixture()).representation(using: .png, properties: [:])!
+        let imageRoot = HistoryPreview.contentView(for: .image(png, type: NSPasteboard.PasteboardType.png.rawValue), size: size)
+        let image = imageRoot.subviews.first as! NSImageView
+        XCTAssertEqual(image.image?.size, NSSize(width: 720, height: 480))
+        savePreview(imageRoot, "history-image-preview.png")
+        savePreview(root, "history-text-preview.png")
+        var history = ClipboardHistory(); history.insert(.text(text))
+        let preview = HistoryPreview(); var closed = false; preview.onDismiss = { closed = true }
+        preview.show(history.entries[0])
+        XCTAssertNotNil(preview.window)
+        preview.retainOnly(Set(history.entries.map(\.id)))
+        XCTAssertNotNil(preview.window)
+        preview.retainOnly([])
+        XCTAssertNil(preview.window); XCTAssertNil(preview.entryID); XCTAssertTrue(closed)
+    }
+    @MainActor func testModeSelectorKeepsCompactLayoutAndReportsSelection() {
+        _ = NSApplication.shared
+        let panel = ShortcutPopover()
+        panel.update(binding: "⌃⌥P", recording: false, needsPermission: false, mode: .chord)
+        let selector = panel.view.subviews.compactMap { $0 as? NSPopUpButton }.first!
+        XCTAssertEqual(selector.indexOfSelectedItem, 1)
+        var selected: ShortcutMode?
+        panel.onModeChange = { selected = $0 }
+        selector.selectItem(at: 0)
+        selector.sendAction(selector.action, to: selector.target)
+        XCTAssertEqual(selected, .doublePress)
+        XCTAssertEqual(panel.preferredContentSize, NSSize(width: 240, height: 56))
+        panel.update(binding: "⌃⌥P", recording: false, needsPermission: false, mode: .chord)
+        savePreview(panel.view, "shortcut-mode-chord.png")
+    }
     private func fixture() -> CGImage {
         let c = CGContext(data: nil, width: 720, height: 480, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         c.setFillColor(NSColor(calibratedRed: 0.86, green: 0.91, blue: 0.94, alpha: 1).cgColor); c.fill(CGRect(x: 0, y: 0, width: 720, height: 480))
