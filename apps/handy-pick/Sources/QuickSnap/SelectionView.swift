@@ -3,10 +3,12 @@ import QuickSnapCore
 
 final class SelectionView: NSView, NSTextFieldDelegate {
     let image: CGImage
+    private let editsWholeImage: Bool
     var onComplete: ((CGImage?) -> Void)?
     private var start: CGPoint?
     private var selection: CGRect = .zero
     private var editing = false
+    private var resizeDrag: (handle: SelectionGeometry.Handle, origin: CGPoint, rect: CGRect)?
     private var tool: Annotation.Kind = .line
     private var annotations: [Annotation] = []
     private var draft: Annotation?
@@ -16,24 +18,72 @@ final class SelectionView: NSView, NSTextFieldDelegate {
     private var textOrigin: CGPoint = .zero
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
-    init(image: CGImage) { self.image = image; super.init(frame: .zero) }
+    init(image: CGImage, editsWholeImage: Bool = false) {
+        self.image = image; self.editsWholeImage = editsWholeImage
+        super.init(frame: .zero)
+        editing = editsWholeImage
+    }
+    override func setBoundsSize(_ newSize: NSSize) {
+        super.setBoundsSize(newSize)
+        if editsWholeImage { selection = bounds }
+    }
     required init?(coder: NSCoder) { fatalError("Not supported") }
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .crosshair)
-        if let toolbar { addCursorRect(toolbar.frame, cursor: .arrow) }
+        if editing && !editsWholeImage {
+            for handle in SelectionGeometry.Handle.allCases.reversed() {
+                addCursorRect(handle.hitRect(on: selection).intersection(bounds), cursor: cursor(for: handle))
+            }
+        }
+        if let toolbar, !toolbar.isHidden { addCursorRect(toolbar.frame, cursor: .arrow) }
+    }
+    private func cursor(for handle: SelectionGeometry.Handle) -> NSCursor {
+        switch handle {
+        case .left, .right: return .resizeLeftRight
+        case .top, .bottom: return .resizeUpDown
+        case .topLeft, .bottomRight: return Self.nwseCursor
+        case .topRight, .bottomLeft: return Self.neswCursor
+        }
+    }
+    private static let nwseCursor = diagonalCursor(rising: false)
+    private static let neswCursor = diagonalCursor(rising: true)
+    private static func diagonalCursor(rising: Bool) -> NSCursor {
+        // Public AppKit APIs only, including on macOS 14.
+        let image = NSImage(size: NSSize(width: 24, height: 24), flipped: false) { _ in
+            let path = NSBezierPath()
+            func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x, y: rising ? y : 24-y) }
+            path.move(to: point(5, 5)); path.line(to: point(19, 19))
+            path.move(to: point(5, 11)); path.line(to: point(5, 5)); path.line(to: point(11, 5))
+            path.move(to: point(13, 19)); path.line(to: point(19, 19)); path.line(to: point(19, 13))
+            path.lineCapStyle = .round; path.lineJoinStyle = .round
+            NSColor.white.setStroke(); path.lineWidth = 4; path.stroke()
+            NSColor.black.setStroke(); path.lineWidth = 2; path.stroke()
+            return true
+        }
+        return NSCursor(image: image, hotSpot: NSPoint(x: 12, y: 12))
     }
     override func draw(_ dirtyRect: NSRect) {
         let picture = NSImage(cgImage: image, size: bounds.size)
         picture.draw(in: bounds, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
-        NSColor.black.withAlphaComponent(0.32).setFill(); bounds.fill()
+        if !editsWholeImage { NSColor.black.withAlphaComponent(0.32).setFill(); bounds.fill() }
         if selection.width > 0, selection.height > 0 {
             NSGraphicsContext.saveGraphicsState()
             NSBezierPath(rect: selection).addClip()
             picture.draw(in: bounds, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
             annotations.forEach { $0.draw() }; draft?.draw()
             NSGraphicsContext.restoreGraphicsState()
-            NSColor.white.setStroke()
-            let outline = NSBezierPath(rect: selection); outline.lineWidth = 1; outline.stroke()
+            if !editsWholeImage {
+                NSColor.white.setStroke()
+                let outline = NSBezierPath(rect: selection); outline.lineWidth = 1; outline.stroke()
+                if editing {
+                    for handle in SelectionGeometry.Handle.allCases {
+                        let point = handle.point(on: selection)
+                        let knob = NSBezierPath(ovalIn: CGRect(x: point.x-3, y: point.y-3, width: 6, height: 6))
+                        NSColor.white.setFill(); knob.fill()
+                        NSColor.black.withAlphaComponent(0.6).setStroke(); knob.lineWidth = 1; knob.stroke()
+                    }
+                }
+            }
             if !editing {
                 ("\(Int(selection.width)) × \(Int(selection.height))" as NSString).draw(at: CGPoint(x: selection.minX+6, y: max(6, selection.minY-26)),
                     withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 14, weight: .medium), .foregroundColor: NSColor.white])
@@ -45,6 +95,13 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         window?.makeKey(); window?.makeFirstResponder(self)
         let point = convert(event.locationInWindow, from: nil)
         if editing {
+            if !editsWholeImage, let handle = SelectionGeometry.handle(at: point, on: selection) {
+                resizeDrag = (handle, point, selection)
+                toolbar?.isHidden = true
+                cursor(for: handle).set()
+                window?.invalidateCursorRects(for: self)
+                return
+            }
             guard selection.contains(point) else { return }
             if tool == .text { beginText(at: point); return }
             start = point; draft = Annotation(kind: tool, start: point, end: point)
@@ -52,6 +109,11 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         needsDisplay = true
     }
     override func mouseDragged(with event: NSEvent) {
+        if let drag = resizeDrag {
+            resize(to: convert(event.locationInWindow, from: nil), drag: drag)
+            cursor(for: drag.handle).set()
+            return
+        }
         guard let start else { return }
         let point = convert(event.locationInWindow, from: nil)
         if editing { draft?.end = clamped(point) }
@@ -59,6 +121,12 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         needsDisplay = true
     }
     override func mouseUp(with event: NSEvent) {
+        if let drag = resizeDrag {
+            resize(to: convert(event.locationInWindow, from: nil), drag: drag)
+            resizeDrag = nil
+            showToolbar()
+            return
+        }
         guard let start else { return }
         self.start = nil
         if editing {
@@ -74,6 +142,11 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         }
         editing = true; showToolbar(); needsDisplay = true
     }
+    private func resize(to point: CGPoint, drag: (handle: SelectionGeometry.Handle, origin: CGPoint, rect: CGRect)) {
+        selection = SelectionGeometry.resized(drag.rect, handle: drag.handle,
+            delta: CGPoint(x: point.x-drag.origin.x, y: point.y-drag.origin.y), in: bounds)
+        needsDisplay = true
+    }
     private func clamped(_ point: CGPoint) -> CGPoint {
         CGPoint(x: min(max(point.x, selection.minX), selection.maxX), y: min(max(point.y, selection.minY), selection.maxY))
     }
@@ -83,11 +156,18 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         if y + height > bounds.maxY - 8 { y = selection.minY - height - 10 }
         y = min(max(8, y), bounds.maxY-height-8)
         let x = min(max(8, selection.maxX-width), bounds.maxX-width-8)
-        let bar = PaperlightGlass(frame: NSRect(x: x, y: y, width: width, height: height), radius: 22)
+        let bar = toolbar ?? makeToolbar()
+        bar.frame = NSRect(x: x, y: y, width: width, height: height)
+        if bar.superview == nil { addSubview(bar) }
+        bar.isHidden = false; toolbar = bar; window?.invalidateCursorRects(for: self)
+    }
+    func makeToolbar() -> PaperlightGlass {
+        let bar = PaperlightGlass(frame: NSRect(x: 0, y: 0, width: 264, height: 44), radius: 22)
         let symbols = ["line.diagonal", "circle", "textformat", "arrow.uturn.backward", "xmark", "checkmark"]
-        let labels = ["划线", "画圈", "文字", "撤销", "取消", "复制截图"]
+        let labels = ["划线", "画圈", "文字", "撤销", "取消", editsWholeImage ? "复制图片" : "复制截图"]
         for index in symbols.indices {
             let button = PaperlightButton(image: NSImage(systemSymbolName: symbols[index], accessibilityDescription: labels[index])!, target: self, action: #selector(toolbarClicked(_:)))
+            if index == 2 { button.image = nil; button.drawsTitleInsteadOfImage = true; button.title = "T"; button.font = .systemFont(ofSize: 18, weight: .semibold) }
             button.frame = NSRect(x: 8 + CGFloat(index)*42, y: 4, width: 36, height: 36)
             button.tag = index; button.isBordered = false; button.cornerRadius = 18; button.toolTip = labels[index]
             button.setAccessibilityLabel(labels[index]); button.setButtonType(index < 3 ? .toggle : .momentaryPushIn)
@@ -96,7 +176,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
             bar.content.addSubview(button); toolButtons.append(button)
         }
         toolButtons[0].state = .on
-        addSubview(bar); toolbar = bar; window?.invalidateCursorRects(for: self)
+        return bar
     }
     @objc private func toolbarClicked(_ sender: NSButton) {
         commitText(); window?.makeFirstResponder(self)

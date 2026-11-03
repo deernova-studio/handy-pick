@@ -10,7 +10,10 @@ public enum InputPolicy {
                                 editable: Bool?, valueSettable: Bool,
                                 selectedTextSettable: Bool = false,
                                 webEditableHost: Bool = false) -> Bool {
-        guard !secure, enabled != false, editable != false else { return false }
+        guard enabled != false, editable != false else { return false }
+        // Password fields intentionally withhold AX value/selection setters.
+        // A secure text-field role is sufficient for Cmd-V; never read its value.
+        if secure { return role == "AXTextField" }
         if ["AXTextField", "AXTextArea", "AXComboBox"].contains(role) {
             // Web editors can expose writable selected text without a writable whole value.
             return editable == true || valueSettable || selectedTextSettable || webEditableHost

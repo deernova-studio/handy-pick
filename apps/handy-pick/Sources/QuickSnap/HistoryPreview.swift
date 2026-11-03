@@ -6,6 +6,7 @@ final class HistoryPreview: NSObject, NSWindowDelegate {
     private(set) var entryID: UUID?
     private(set) var window: NSPanel?
     var onDismiss: (() -> Void)?
+    var onEditedImage: ((CGImage) -> Void)?
 
     func show(_ entry: ClipboardHistory.Entry) {
         dismiss()
@@ -24,15 +25,26 @@ final class HistoryPreview: NSObject, NSWindowDelegate {
         panel.minSize = NSSize(width: 320, height: 240)
         panel.delegate = self
         panel.contentView = Self.contentView(for: entry.content, size: size)
+        if let content = panel.contentView as? HistoryImageEditor {
+            content.editor.onComplete = { [weak self] image in
+                guard let self else { return }
+                self.dismiss()
+                if let image { self.onEditedImage?(image) }
+            }
+        }
         panel.setFrameOrigin(NSPoint(x: visible.midX-panel.frame.width/2, y: visible.midY-panel.frame.height/2))
         window = panel
         panel.makeKeyAndOrderFront(nil)
+        if let content = panel.contentView as? HistoryImageEditor { panel.makeFirstResponder(content.editor) }
     }
 
     static func contentView(for content: ClipboardHistory.Content, size: NSSize) -> NSView {
         let root = PaperlightSurface(frame: NSRect(origin: .zero, size: size))
         switch content {
         case .image(let data, _):
+            if let image = NSImage(data: data)?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                return HistoryImageEditor(image: image, size: size)
+            }
             let image = NSImageView(frame: root.bounds.insetBy(dx: 16, dy: 16))
             image.image = NSImage(data: data)
             image.imageScaling = .scaleProportionallyUpOrDown

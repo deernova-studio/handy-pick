@@ -108,10 +108,10 @@ final class QuickSnapCoreTests: XCTestCase {
         XCTAssertFalse(InputPolicy.canPaste(role: "AXStaticText", secure: false, enabled: true, editable: nil, valueSettable: true))
         XCTAssertFalse(InputPolicy.canPaste(role: "AXTextArea", secure: false, enabled: true, editable: nil, valueSettable: false))
     }
-    func testReadOnlyDisabledAndSecureFieldsRejectPaste() {
+    func testReadOnlyAndDisabledFieldsRejectPaste() {
         XCTAssertFalse(InputPolicy.canPaste(role: "AXTextArea", secure: false, enabled: true, editable: false, valueSettable: true))
         XCTAssertFalse(InputPolicy.canPaste(role: "AXTextField", secure: false, enabled: false, editable: true, valueSettable: true))
-        XCTAssertFalse(InputPolicy.canPaste(role: "AXTextField", secure: true, enabled: true, editable: true, valueSettable: true))
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXTextField", secure: true, enabled: false, editable: true, valueSettable: true))
     }
     func testWebEditorCanReplaceSelectionWithoutSettingWholeValue() {
         XCTAssertTrue(InputPolicy.canPaste(role: "AXTextArea", secure: false, enabled: true,
@@ -128,8 +128,17 @@ final class QuickSnapCoreTests: XCTestCase {
                         editable: nil, valueSettable: false, selectedTextSettable: true))
         XCTAssertFalse(InputPolicy.canPaste(role: "AXGroup", secure: false, enabled: true,
                         editable: true, valueSettable: false))
-        XCTAssertFalse(InputPolicy.canPaste(role: "AXTextField", secure: true, enabled: true,
+        XCTAssertTrue(InputPolicy.canPaste(role: "AXTextField", secure: true, enabled: true,
                         editable: true, valueSettable: false, selectedTextSettable: true))
+    }
+    func testSecureTextFieldAcceptsPasteWithoutExposingItsContents() {
+        XCTAssertTrue(InputPolicy.canPaste(role: "AXTextField", secure: true, enabled: true,
+                         editable: nil, valueSettable: false, selectedTextSettable: false))
+        XCTAssertFalse(InputPolicy.canCopySelection("fixture", secure: true))
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXTextField", secure: true, enabled: true,
+                         editable: false, valueSettable: false))
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXGroup", secure: true, enabled: true,
+                         editable: true, valueSettable: true))
     }
     func testAdvertisedWebEditableHostDoesNotNeedAXValueSetter() {
         for role in ["AXTextArea", "AXGroup"] {

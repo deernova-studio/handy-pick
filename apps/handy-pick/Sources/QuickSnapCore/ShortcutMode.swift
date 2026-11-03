@@ -9,8 +9,16 @@ public enum ShortcutMode: String, Codable, CaseIterable {
         guard binding.isValid else { return false }
         if self == .doublePress { return true }
         guard case .key(_, let flags) = binding else { return false }
-        // Shift alone still types text; require a deliberate shortcut modifier.
-        return flags & ((1 << 18) | (1 << 19) | (1 << 20)) != 0
+        // Shift-only chords are also explicit shortcuts in chord mode.
+        return flags & ShortcutBinding.modifierMask != 0
+    }
+
+    public func allowsActivation(for binding: ShortcutBinding,
+                                 focusAllowsShortcut: @autoclosure () -> Bool) -> Bool {
+        guard accepts(binding) else { return false }
+        // Only double-press typing keys need focus protection. Chords must not
+        // query focus at all, including in editors or when AX is unavailable.
+        return self == .chord || !binding.needsTypingProtection || focusAllowsShortcut()
     }
 }
 

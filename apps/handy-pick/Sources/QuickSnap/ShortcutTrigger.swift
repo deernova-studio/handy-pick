@@ -9,6 +9,7 @@ final class ShortcutTrigger {
     var mode: ShortcutMode = .doublePress
     var onAction: ((ClickRecognizer.Gesture) -> Void)?
     var onRecorded: ((ShortcutBinding?) -> Void)?
+    var onRecordingHint: ((String) -> Void)?
     var suspended = false
     private(set) var recording = false
     private var active = false
@@ -78,6 +79,16 @@ final class ShortcutTrigger {
         DispatchQueue.main.async { [weak self] in self?.onRecorded?(value) }
     }
 
+    private func acceptRecordedBinding(_ value: ShortcutBinding) {
+        if mode.accepts(value) { record(value) }
+        else {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.recording else { return }
+                self.onRecordingHint?("请按修饰键 + 主键")
+            }
+        }
+    }
+
     private func process(_ type: CGEventType, _ event: CGEvent) -> Bool {
         // Our own ⌘V must pass through even when ⌘V is the configured double-press shortcut.
         if event.getIntegerValueField(.eventSourceUserData) == Self.syntheticEventTag { return false }
@@ -94,13 +105,13 @@ final class ShortcutTrigger {
         if recording {
             if type == .otherMouseDown {
                 let value = ShortcutBinding.mouse(event.getIntegerValueField(.mouseEventButtonNumber))
-                if mode.accepts(value) { record(value) }
+                acceptRecordedBinding(value)
                 return true
             } else if type == .keyDown {
                 if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return true }
                 if code == 53 { record(nil); return true }
                 let value = ShortcutBinding.key(code, flags & ShortcutBinding.modifierMask)
-                if mode.accepts(value) { record(value) }
+                acceptRecordedBinding(value)
                 return true
             } else if type == .flagsChanged, ShortcutBinding.isModifier(code) {
                 if mode == .doublePress {
@@ -127,7 +138,7 @@ final class ShortcutTrigger {
         case .key:
             guard type == .keyDown, binding.matchesKey(code, flags: flags),
                   event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else { return false }
-            let allowShortcut = !binding.needsTypingProtection || TypingFocus.allowsShortcut(for: frontmostPID)
+            let allowShortcut = mode.allowsActivation(for: binding, focusAllowsShortcut: TypingFocus.allowsShortcut(for: frontmostPID))
             if !allowShortcut { recognizer.cancel() }
             let result = keyGate.down(binding: binding, code: code, flags: flags,
                                       repeating: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
@@ -145,7 +156,7 @@ final class ShortcutTrigger {
         let token = generation
         DispatchQueue.main.async { [weak self] in
             guard let self, self.running, !self.recording, !self.suspended, self.generation == token else { return }
-            if keyboard, self.binding.needsTypingProtection, !TypingFocus.allowsShortcut(for: gesture.target) {
+            if keyboard, !self.mode.allowsActivation(for: self.binding, focusAllowsShortcut: TypingFocus.allowsShortcut(for: gesture.target)) {
                 self.recognizer.cancel(); return
             }
             let mouse = NSEvent.mouseLocation

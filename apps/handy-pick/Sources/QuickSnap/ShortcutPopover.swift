@@ -14,14 +14,18 @@ final class ShortcutPopover: NSViewController {
     private let scroll = NSScrollView()
     private let separator = PaperlightSurface()
     private let bindingButton = PaperlightButton(title: "", target: nil, action: nil)
-    private let modeButton = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let modeButton = NSPopUpButton(frame: .zero, pullsDown: true)
     private let grid = FlippedHistoryView()
     private var needsPermission = false
 
     override func loadView() {
         let root = PaperlightSurface(frame: NSRect(x: 0, y: 0, width: 360, height: 392))
         modeButton.frame = NSRect(x: 12, y: 14, width: 88, height: 28)
-        modeButton.addItems(withTitles: ["双击", "组合键"])
+        // A pop-up aligns its selected row over the control. A pull-down opens
+        // below it; its hidden first item supplies the current mode's title.
+        modeButton.addItems(withTitles: ["触发方式", "双击", "组合键"])
+        modeButton.item(at: 0)?.isHidden = true
+        modeButton.preferredEdge = .minY
         modeButton.font = Paperlight.label
         modeButton.target = self; modeButton.action = #selector(selectTriggerMode)
         modeButton.setAccessibilityLabel("触发方式")
@@ -49,9 +53,12 @@ final class ShortcutPopover: NSViewController {
 
     func update(binding: String, recording: Bool, needsPermission: Bool, mode: ShortcutMode = .doublePress) {
         loadViewIfNeeded(); self.needsPermission = needsPermission
-        modeButton.selectItem(at: mode == .doublePress ? 0 : 1)
+        modeButton.item(at: 0)?.title = mode == .doublePress ? "双击" : "组合键"
+        modeButton.selectItem(at: mode == .doublePress ? 1 : 2)
+        modeButton.item(at: 1)?.state = mode == .doublePress ? .on : .off
+        modeButton.item(at: 2)?.state = mode == .chord ? .on : .off
         bindingButton.title = needsPermission ? "授权…" : (recording ? (mode == .chord ? "请按组合键…" : "请按新键…") : binding)
-        bindingButton.toolTip = mode == .chord ? "按住 ⌘、⌃ 或 ⌥ 再按一个键；一次触发，Esc 取消" : "点击后按新键，双击触发；Esc 取消"
+        bindingButton.toolTip = mode == .chord ? "按住 ⌘、⌃、⌥ 或 ⇧ 再按一个键；一次触发，输入框内也生效；Esc 取消" : "点击后按新键，双击触发；Esc 取消"
     }
     func updateHistory(_ entries: [ClipboardHistory.Entry]) {
         loadViewIfNeeded()
@@ -85,9 +92,10 @@ final class ShortcutPopover: NSViewController {
             grid.addSubview(tile)
         }
     }
+    func showRecordingHint(_ text: String) { bindingButton.title = text }
     @objc private func clearHistory() { onClear?() }
     @objc private func record() { if needsPermission { onPermission?() } else { onRecord?() } }
-    @objc private func selectTriggerMode() { onModeChange?(modeButton.indexOfSelectedItem == 1 ? .chord : .doublePress) }
+    @objc private func selectTriggerMode() { onModeChange?(modeButton.indexOfSelectedItem == 2 ? .chord : .doublePress) }
 }
 
 private final class FlippedHistoryView: NSView { override var isFlipped: Bool { true } }

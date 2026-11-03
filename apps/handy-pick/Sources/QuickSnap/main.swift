@@ -52,6 +52,7 @@ import OSLog
             self?.trigger.cancelRecording(); self?.refresh()
         }
         shortcutPanel.isRecording = { [weak self] in self?.trigger.recording ?? false }
+        trigger.onRecordingHint = { [weak self] in self?.panel.showRecordingHint($0) }
         panel.onSizeChange = { [weak self] size in self?.shortcutPanel.resize(to: size) }
         clipboard.onChange = { [weak self] entries in
             self?.panel.updateHistory(entries)
@@ -60,6 +61,12 @@ import OSLog
         historyPreview.onDismiss = { [weak self] in
             guard let self else { return }
             self.trigger.suspended = self.capture.active || self.preparing
+        }
+        historyPreview.onEditedImage = { [weak self] image in
+            guard let self else { return }
+            self.recentImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+            self.copyRecent()
+            self.inform("标注图片已复制")
         }
         panel.onPreview = { [weak self] id in
             guard let self, let entry = self.clipboard.history.entries.first(where: { $0.id == id }) else { return }

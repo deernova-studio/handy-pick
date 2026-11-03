@@ -102,7 +102,8 @@ import QuickSnapCore
             AXUIElementSetMessagingTimeout(element, 0.1)
             let role = attribute(element, kAXRoleAttribute) as? String ?? ""
             let secure = (attribute(element, kAXSubroleAttribute) as? String) == (kAXSecureTextFieldSubrole as String)
-            if secure { return nil }
+            // Secure fields reject content reads, not user-initiated paste.
+            if secure { return target(for: element) }
             // Chromium advertises this only for editable nodes. A contenteditable host
             // need not support replacing its whole AXValue or AXSelectedText via AX.
             if let host = webEditableHost(of: element), let target = target(for: host, webHost: true), target.pid == hitPID {

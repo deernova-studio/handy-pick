@@ -85,6 +85,7 @@ class PaperlightButton: NSButton {
     var style: Style = .plain
     var cornerRadius: CGFloat = 6
     var isOnGlass = false
+    var drawsTitleInsteadOfImage = false
     private(set) var hovered = false
     private var tracking: NSTrackingArea?
     override func updateTrackingAreas() {
@@ -110,14 +111,14 @@ class PaperlightButton: NSButton {
             Paperlight.ink.setStroke(); path.lineWidth = 2; path.stroke()
         }
         let foreground = !isEnabled ? Paperlight.tertiary : (style == .primary ? Paperlight.onAccent : (state == .on || isOnGlass ? Paperlight.ink : Paperlight.secondary))
-        if let image {
+        if let image, !drawsTitleInsteadOfImage {
             let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
                 .applying(NSImage.SymbolConfiguration(paletteColors: [foreground]))
             let symbol = image.withSymbolConfiguration(config) ?? image
             let size = symbol.size
             symbol.draw(in: NSRect(x: (bounds.width-size.width)/2, y: (bounds.height-size.height)/2, width: size.width, height: size.height))
         } else {
-            let attrs: [NSAttributedString.Key: Any] = [.font: Paperlight.label, .foregroundColor: foreground]
+            let attrs: [NSAttributedString.Key: Any] = [.font: font ?? Paperlight.label, .foregroundColor: foreground]
             let size = (title as NSString).size(withAttributes: attrs)
             (title as NSString).draw(at: NSPoint(x: (bounds.width-size.width)/2, y: (bounds.height-size.height)/2), withAttributes: attrs)
         }

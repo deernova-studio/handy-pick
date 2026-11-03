@@ -73,6 +73,55 @@ final class ClipboardAndEditorTests: XCTestCase {
         buttons.first { $0.tag == 5 }!.performClick(nil)
         XCTAssertEqual(result?.width, 520); XCTAssertEqual(result?.height, 260)
     }
+    @MainActor func testCropResizePreservesAnnotationsAndRepositionsExistingToolbar() {
+        _ = NSApplication.shared
+        let panel = SelectionPanel(contentRect: NSRect(x: 0, y: 0, width: 720, height: 480), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false; defer { panel.close() }
+        let view = SelectionView(image: fixture()); panel.contentView = view
+        func event(_ kind: NSEvent.EventType, _ x: CGFloat, _ y: CGFloat) -> NSEvent {
+            let point = view.convert(CGPoint(x: x, y: y), to: nil)
+            return mouse(kind, x: point.x, y: point.y)
+        }
+        func drag(_ x: CGFloat, _ y: CGFloat, _ endX: CGFloat, _ endY: CGFloat) {
+            view.mouseDown(with: event(.leftMouseDown, x, y))
+            view.mouseDragged(with: event(.leftMouseDragged, endX, endY))
+            view.mouseUp(with: event(.leftMouseUp, endX, endY))
+        }
+        drag(80, 100, 600, 360)
+        let bar = view.subviews.compactMap { $0 as? PaperlightGlass }.first!
+        let buttons = bar.content.subviews.compactMap { $0 as? NSButton }
+        var result: CGImage?
+        view.onComplete = { result = $0 }
+        drag(150, 200, 400, 200)
+        buttons[5].performClick(nil)
+        let annotated = result!.dataProvider!.data! as Data
+        let originalBarFrame = bar.frame
+        // Start a few points outside the edge: no jump, no accidental annotation.
+        view.mouseDown(with: event(.leftMouseDown, 603, 230))
+        XCTAssertTrue(bar.isHidden)
+        view.mouseDragged(with: event(.leftMouseDragged, 303, 230))
+        view.mouseUp(with: event(.leftMouseUp, 303, 230))
+        XCTAssertFalse(bar.isHidden)
+        buttons[5].performClick(nil)
+        XCTAssertEqual(result?.width, 220); XCTAssertEqual(result?.height, 260)
+        XCTAssertNotEqual(bar.frame, originalBarFrame)
+        drag(303, 230, 603, 230)
+        buttons[5].performClick(nil)
+        XCTAssertEqual(result!.dataProvider!.data! as Data, annotated, "Shrinking and expanding must retain annotations at original coordinates")
+        // Corner resize with the text tool selected must not start a text field.
+        buttons[2].performClick(nil)
+        drag(80, 100, 40, 60)
+        XCTAssertTrue(view.subviews.compactMap { $0 as? NSTextField }.isEmpty)
+        XCTAssertEqual(buttons[2].state, .on)
+        buttons[5].performClick(nil)
+        XCTAssertEqual(result?.width, 560); XCTAssertEqual(result?.height, 300)
+        XCTAssertEqual(view.subviews.compactMap { $0 as? PaperlightGlass }.count, 1)
+        savePreview(view, "resizable-crop.png")
+        // Undo still removes the original line; resizing is not an annotation.
+        buttons[3].performClick(nil); buttons[5].performClick(nil)
+        let clean = AnnotationRenderer.render(image: view.image, selection: CGRect(x: 40, y: 60, width: 560, height: 300), logicalSize: view.bounds.size, annotations: [])!
+        XCTAssertEqual(result!.dataProvider!.data! as Data, clean.dataProvider!.data! as Data)
+    }
     @MainActor func testHistoryGridContainsSettingsAndSelectableCards() {
         _ = NSApplication.shared
         let panel = ShortcutPopover(); panel.loadViewIfNeeded()
@@ -144,8 +193,8 @@ final class ClipboardAndEditorTests: XCTestCase {
         XCTAssertEqual(editor.string, text); XCTAssertFalse(editor.isEditable); XCTAssertTrue(editor.isSelectable)
         let png = NSBitmapImageRep(cgImage: fixture()).representation(using: .png, properties: [:])!
         let imageRoot = HistoryPreview.contentView(for: .image(png, type: NSPasteboard.PasteboardType.png.rawValue), size: size)
-        let image = imageRoot.subviews.first as! NSImageView
-        XCTAssertEqual(image.image?.size, NSSize(width: 720, height: 480))
+        let image = (imageRoot as! HistoryImageEditor).editor.image
+        XCTAssertEqual(image.width, 720); XCTAssertEqual(image.height, 480)
         savePreview(imageRoot, "history-image-preview.png")
         savePreview(root, "history-text-preview.png")
         var history = ClipboardHistory(); history.insert(.text(text))
@@ -157,15 +206,52 @@ final class ClipboardAndEditorTests: XCTestCase {
         preview.retainOnly([])
         XCTAssertNil(preview.window); XCTAssertNil(preview.entryID); XCTAssertTrue(closed)
     }
+    @MainActor func testHistoryImageAnnotationKeepsResolutionAndSurvivesResize() {
+        _ = NSApplication.shared
+        let content = HistoryImageEditor(image: fixture(), size: NSSize(width: 640, height: 480))
+        let window = NSPanel(contentRect: content.bounds, styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; window.contentView = content
+        defer { window.close() }
+        let editor = content.editor
+        let buttons = content.toolbar.content.subviews.compactMap { $0 as? NSButton }
+        XCTAssertEqual(buttons.count, 6)
+        XCTAssertEqual(buttons[2].title, "T"); XCTAssertTrue((buttons[2] as! PaperlightButton).drawsTitleInsteadOfImage)
+        var rendered: CGImage?
+        editor.onComplete = { rendered = $0 }
+        buttons[5].performClick(nil)
+        let original = rendered!.dataProvider!.data! as Data
+        func event(_ kind: NSEvent.EventType, _ point: CGPoint) -> NSEvent {
+            let location = editor.convert(point, to: nil)
+            return mouse(kind, x: location.x, y: location.y)
+        }
+        editor.mouseDown(with: event(.leftMouseDown, CGPoint(x: 80, y: 80)))
+        editor.mouseDragged(with: event(.leftMouseDragged, CGPoint(x: 400, y: 240)))
+        editor.mouseUp(with: event(.leftMouseUp, CGPoint(x: 400, y: 240)))
+        buttons[5].performClick(nil)
+        XCTAssertEqual(rendered?.width, 720); XCTAssertEqual(rendered?.height, 480)
+        let annotated = rendered!.dataProvider!.data! as Data
+        XCTAssertNotEqual(annotated, original)
+        let oldSize = editor.frame.size
+        window.setContentSize(NSSize(width: 840, height: 600)); content.layoutSubtreeIfNeeded()
+        XCTAssertNotEqual(editor.frame.size, oldSize)
+        buttons[5].performClick(nil)
+        XCTAssertEqual(rendered!.dataProvider!.data! as Data, annotated)
+        savePreview(content, "history-image-annotation.png")
+        buttons[3].performClick(nil); buttons[5].performClick(nil)
+        XCTAssertEqual(rendered!.dataProvider!.data! as Data, original)
+    }
     @MainActor func testModeSelectorKeepsCompactLayoutAndReportsSelection() {
         _ = NSApplication.shared
         let panel = ShortcutPopover()
         panel.update(binding: "⌃⌥P", recording: false, needsPermission: false, mode: .chord)
         let selector = panel.view.subviews.compactMap { $0 as? NSPopUpButton }.first!
-        XCTAssertEqual(selector.indexOfSelectedItem, 1)
+        XCTAssertEqual(selector.indexOfSelectedItem, 2)
+        XCTAssertTrue(selector.pullsDown)
+        XCTAssertEqual(selector.item(at: 0)?.title, "组合键")
+        XCTAssertEqual(selector.item(at: 0)?.isHidden, true)
         var selected: ShortcutMode?
         panel.onModeChange = { selected = $0 }
-        selector.selectItem(at: 0)
+        selector.selectItem(at: 1)
         selector.sendAction(selector.action, to: selector.target)
         XCTAssertEqual(selected, .doublePress)
         XCTAssertEqual(panel.preferredContentSize, NSSize(width: 240, height: 56))
