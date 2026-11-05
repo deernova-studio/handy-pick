@@ -1,97 +1,37 @@
-# 随取 · handypick
+<img src="apps/handy-pick/Resources/AppIcon.png" width="80" alt="handypick icon">
 
-中文显示名称为「随取」，英文为「handypick」，跟随系统语言。Bundle ID、签名身份、内部可执行文件和安装路径保持不变，便于沿用已有设置与授权。
+# handypick
 
-一个用双击或组合快捷键完成选中文字复制、剪贴板粘贴和框选截图的原生 macOS 菜单栏工具。默认双击鼠标中键，可在菜单栏面板切换触发方式。
+**Copy, paste, and capture. A little easier.**
 
-## 使用
+A lightweight macOS menu bar app that keeps everyday actions close at hand.
 
-1. 打开「应用程序 → 随取 / handypick」。启动后只显示叠卡片图标，没有主窗口或 Dock 图标。
-2. 点击菜单栏图标，在第一行选择「双击」或「组合键」，点击旁边的键位录入，Esc 取消。双击支持中键、侧键、键盘键或单独的修饰键；组合键需包含 ⌘、⌃、⌥ 或 ⇧ 和一个主键，按一次即触发，默认 ⌃⌥P。两种方式分别记住上次的绑定。组合键模式在输入框内外均生效，不进行打字保护判断；包括 ⇧Z 在内，绑定组合会作为专用快捷键被接管。
-3. 选中文字后，将鼠标留在该文字区域，双击绑定按键 → 复制选中文字（优先于粘贴）。
-4. 没有选区时，在输入区内双击 → 粘贴当前剪贴板内容；在其他位置双击 → 左键拖动框选截图。松开后可拖动四边或四角调整范围，也可划线、画圈、添加文字；点勾号或按回车复制。撤销按钮或 ⌘Z 撤销标注，文字输入时回车先结束编辑。点击「识别并选取文字」后，直接在图片上拖选文字，⌘C 或右键复制；勾号复制选中文字，未选中时复制全部。Esc 或再次点击识别退出选字，切换标注工具或拖动选区边缘也会退出；再次识别使用调整后的图片。识别在本机完成，不上传截图。
-5. 文字或截图复制成功后，鼠标旁显示小巧的磨砂「✓ 已复制」胶囊浮层（绿色细勾号，随系统适配明暗），约 0.9 秒后消失，不抢焦点、不阻挡点击。框选时只显示选区和尺寸，松开后显示标注工具条，不显示左上角操作提示。Esc 或右键取消框选。双击模式下单击不会触发；两种模式均忽略键盘长按重复。
+**English** · [简体中文](README.zh-CN.md)
 
-下面的“双击”说明适用于双击模式；组合键模式只需按一次绑定的组合。双击模式中，组合键可以保持修饰键、连续按两次主键。双击左/右 Command、Shift、Option、Control 或 Fn 也可绑定。普通键（含仅带 Shift 的输入键）在输入框获得焦点时正常输入，不触发双击快捷操作；连续输入相同字符、长按、空格、删除及方向键也正常放行。判断依据是键盘焦点，不是鼠标位置；已识别且没有编辑能力的网页背景、普通容器和窗口区域可触发普通键快捷操作；真正未知的自绘控件或辅助功能查询失败／超时仍优先放行。鼠标键、修饰键、F1–F20 与带 Command／Control／Option 的组合键保持快捷操作行为；组合键仍是专用快捷键，原有单击组合动作会被接管。输入时需要双击粘贴，可使用鼠标键、修饰键、功能键或不冲突的组合键。
+[Download for Mac](https://github.com/deernova-studio/handy-pick/releases/latest) · macOS 14+ · Apple Silicon
 
-鼠标左右键保留给点击和框选，不能绑定；Esc 保留取消。系统保留快捷键和媒体键可能被 macOS 先处理。菜单栏使用无箭头的圆角小面板，顶部为触发方式和当前键位，设置行右侧通过网格、图片、文字三个连体分段图标筛选（以竖线分隔，悬停显示名称），以三列网格展示本次运行期间的图片与文字，高度随记录数量适配，最多完整展示三行，超过三行可滚动；点击卡片重新复制；悬停卡片时，右上角显示放大按钮，点击打开图片或完整文字预览。图片预览支持与截图相同的划线、画圈、T 文字标注、OCR 选字和撤销，点勾号复制结果并新增历史记录，保留原图；关闭或取消不改动剪贴板。预览可调整窗口大小，长文字支持滚动和选择；Esc 或关闭按钮退出。右键也可预览、删除单条或清空记录。删除正在预览的记录或清空历史时，会一起关闭预览。点击键位即可录入；面板打开时仍可双击触发截图或粘贴，触发时自动收起。正在录入新键位时，按键用于录入。点击面板外或按 Esc 可收起面板；右键图标可暂停、启用、退出、开始截图和复制最近截图。按键与暂停状态会被保存，启动后按已有授权恢复监听。
+## One gesture, three handy actions
 
-首次使用如果缺少屏幕录制或辅助功能权限，小面板会显示授权入口。已有权限时不显示其他设置项目，没有独立的设置窗口。
+Double-click the middle mouse button:
 
-快捷键监听只检查物理键码与修饰键标志，不记录键入内容。双击复制时，通过辅助功能读取当前指针所在文字区域的显式选区，并放入本机剪贴板；历史仅暂存在内存，不写盘、不上传，不读取或复制密码框内容；允许向已确认的密码／API Key 输入框发送粘贴，禁用或只读控件仍拒绝。绑定配置保存在本机 UserDefaults。
+| Where you point | What happens |
+| --- | --- |
+| Selected text | Copy the selection |
+| A supported input field | Paste your clipboard |
+| Elsewhere | Capture part of your screen |
 
-划词复制要求目标应用提供辅助功能选区；未提供选区的应用暂不能自动识别，仍可使用 ⌘C，然后双击粘贴。此版本将选中文字复制为纯文本；粘贴使用系统 ⌘V，支持的图片、富文本等类型由目标应用决定。内部 Bundle ID 和偏好设置域仍保留 studio.deernova.quick-snap，正式签名身份不变；One 任务统一使用 handy-pick 名称。
+Prefer a keyboard shortcut? Set your own from the menu bar.
 
-构建产物在 `apps/handy-pick/build/HandyPick.app`；当前本机安装在 `/Applications/HandyPick.app`，重建后须更新安装副本。
+## Small app, useful extras
 
-## 构建
+- **Make screenshots clearer.** Resize the selection, draw lines and circles, or add text.
+- **Pick text from pictures.** Select words directly in an image and copy them with on-device OCR.
+- **Find what you just copied.** Browse image and text history, preview an item, and copy it again.
 
-macOS 14+、Xcode / Swift 5.9+，没有第三方 Swift 依赖。应用位于 `apps/handy-pick`，工作区由 One CLI 管理。
+Lives quietly in your menu bar. No account needed. Clipboard history stays in memory and clears when the app quits.
 
-本地使用 One 的开发版：先在包含 Swift 支持的 **One CLI 源码仓库**中，使用已有的 One 命令执行仓库提供的安装任务：
+## Get started
 
-```sh
-one install
-```
+Open the DMG, drag handypick into Applications, and launch it. Allow Screen Recording and Accessibility when prompted, then try a middle-button double-click.
 
-该任务构建开发版，并将 `~/.local/bin/one` 链接到源码仓库内的程序。确保 `~/.local/bin` 在 PATH 中，并保留该源码仓库。更新源码后再次执行 `one install` 即可。此命令是 One CLI 仓库的任务，应在该仓库中执行。
-
-回到 HandyPick 仓库，准备任务工具：
-
-```sh
-one mise trust
-one mise install
-```
-
-云端 runner 不共享本机安装。CI 使用 `scripts/bootstrap-one.sh` 从固定上游提交 `bc73b921d85e1896044167c0be96a2b8936edf54` 构建 One，并校验源码 SHA-256；这是 CI 的准备步骤，本地无需重复运行。正式版 v0.1.24 尚不支持 Swift，需使用包含该功能的开发版或后续正式版。
-
-```sh
-one run handy-pick:check  # 发布脚本测试、Swift 测试与 Release 编译
-one run handy-pick:build # 生成开发 .app
-one run handy-pick:dev   # 构建并前台运行，停止任务即可退出
-one run handy-pick:pack  # 生成本地未公证 DMG
-```
-
-`dev` 前先退出已运行的 HandyPick，避免两份实例同时监听鼠标。开发任务不会替换 `/Applications` 中的安装副本。修改 `apps/handy-pick/Taskfile.yml` 后运行 `one init mise`，不要直接维护生成的任务配置。
-
-本地 DMG 位于 `apps/handy-pick/build/distribution-dev/handypick-local.dmg`，仅供本机验证；正式签名公证使用发布流程。
-
-用 Xcode 打开 `apps/handy-pick/Package.swift` 可编辑源码。脚本生成可双击运行的 `.app`，默认本机 ad-hoc 签名。可通过环境变量 `QUICK_SNAP_SIGN_IDENTITY` 指定已有的 Apple Development 签名身份。重新构建后如果系统撤销权限，需要重新授权；权限应授予 `.app`，而不是命令行 Swift 进程。
-
-建议持续使用同一个 Apple Development 身份构建。切换签名身份（包括切回 ad-hoc）可能使 macOS 要求重新授予权限。
-
-## 签名 DMG 与发布
-
-签名材料保存在 One 的共享凭据库；首次在本机终端运行 `one run handy-pick:signing-setup` 导入，之后用 `one run handy-pick:signing-check` 验证、`one run handy-pick:release` 签名公证。换 Mac 后登录同一账户和组织即可取用，不必重复导入 P12。证书过期或撤销时需在中心位置更新。
-
-发布使用 Developer ID、强化运行时和 Apple 公证，生成 Apple 芯片版 DMG。GitHub 发布仅手动触发，CI 的独立授权需按[配置和发布说明](docs/github-actions.md)完成后使用。
-
-## 界面风格
-
-界面采用用户提供的 Paperlight v2 设计语言。中性黑白灰语义颜色集中在 `Sources/QuickSnap/Paperlight.swift`，原始 token 快照保留于 `design/paperlight.tokens.json`。剪贴板使用不透明纸面、无阴影卡片、8pt 圆角、13pt 正文和细描边；首行为快捷键设置，没有记录时只显示设置行，不显示空状态或占位区域。悬停、选中和键盘焦点靠明暗和描边区分。
-
-macOS 26 的标注工具条与指针旁复制反馈使用原生 `NSGlassEffectView`；确认操作为黑白主按钮，成功提示使用 Paperlight 的青绿状态色。图片和标注属于内容，保留原颜色。现有 macOS 14/15 支持保留，使用系统材质回退；降低透明度时改用不透明纸面，跟随系统浅色和深色外观。菜单栏品牌图标和双击交互保持原样。
-
-## 图标
-
-采用用户选定的黑白叠卡片图案，以掀起的边角表达取用与传递。`apps/handy-pick/Resources/AppIcon.png` 为白底图标，`QuickSnap.icns` 是应用图标。菜单栏使用 `apps/handy-pick/Sources/QuickSnap/MenuBarIcon.swift` 绘制的 22×18 点画布、20×16 点白色圆角小底（底块尺寸不变，仅内部叠卡片图形居中缩小至 80%）；沿用应用图标的倾斜叠卡片与掀角轮廓，简化后的图形以透明 alpha 镂空，透出菜单栏底色。`MenuIcon.png` 为同一矢量绘制的 2 倍尺寸导出，`MenuIcon-preview.png` 为蓝色菜单栏上的样式预览。由内置 image_gen 生成，最终提示词保存在 `apps/handy-pick/Resources/IconPrompt.txt`。运行 `zsh apps/handy-pick/Scripts/build-icons.sh` 可重新生成不同尺寸资源。
-
-## 行为与边界
-
-- 所有快捷操作统一为双击：鼠标所在位置是可编辑输入区时粘贴，其他位置截图。单击不触发操作，也没有单击延迟任务。
-- 输入区域识别使用辅助功能的鼠标位置命中测试，不依赖之前的输入焦点；仅确认可编辑、启用中的文本控件允许粘贴；密码框允许粘贴但不读取或复制已有内容。macOS 自带终端另按当前聚焦的 AXTextArea 识别，仅鼠标位于该区域且前台与命中进程一致时允许粘贴，不依赖屏幕缓冲区的可写属性。支持仅允许替换选中文本的网页编辑器；通用分组容器还必须明确声明可编辑。普通文字、只读控件和无法识别的区域按截图处理。
-- 网页编辑器若明确公布 AXEditableAncestor，可用该编辑区域作为目标，不要求它支持 AXValue 整体替换。命中测试只返回外层容器时，可回退到当前焦点输入框，但鼠标必须位于该输入框的实际边界内，且顶层命中、焦点和前台应用属于同一进程。
-- 对包含 Electron Framework 的应用，首次双击时按 [Electron 官方接口](https://www.electronjs.org/docs/latest/tutorial/accessibility#macos)启用其辅助功能树，并短暂等待渲染层提供控件信息；未识别为 Electron 的应用不设置此属性。异步等待期间若前台应用切换，取消本次操作。
-- 自绘编辑器或未提供完整辅助功能信息的应用可能无法识别输入区；可使用菜单栏复制最近截图后手动 ⌘V。无法自动聚焦的输入框需要先左键点入。
-- 选中文字优先复制；想覆盖输入框里的原文时，可直接使用 ⌘V。空剪贴板仅提示，不覆盖已有输入。
-- 粘贴不会按回车或发送聊天消息。目标应用需支持剪贴板图片。
-- 双击期间若前台应用改变，或者两次点击距离过大，不会识别为粘贴。
-- 框选时显示冻结画面；多显示器可任选一块屏幕框选，暂不跨屏拼接。
-- 图片保留在当前进程内存和 macOS 剪贴板中，不写入磁盘、不联网。退出后剪贴板内容仍由系统管理。
-- 粘贴前最多等待约 0.6 秒确认焦点。系统日志只记录截图/粘贴路由、未找到输入区、当前进程无截图或聚焦未确认，不记录输入文字、图片或控件内容。最近一次处理阶段也以固定状态码保存在本机 UserDefaults，供系统日志不可用时诊断。
-- 被系统或应用保护的内容可能无法截图；锁屏、权限撤销或特殊鼠标驱动需要实际验证。
-- 剪贴板历史在启动时开始监听，不导入启动前的内容；每 0.5 秒检查变化，极短时间内连续发生的外部复制可能只保留最后一项。最近 60 项、合计最多 64 MiB，超限淘汰最旧记录，单项超限跳过。纯文字与 PNG/TIFF 图片可回选，不保留富文本格式。
-- 历史不写盘，重启清空。清空记录不改变系统当前剪贴板；忽略来源标记为 concealed、transient 或 autogenerated 的内容。
-- 没有 OCR、录屏或云同步。
-
-`QuickSnapCore` 包含输入无关的双击判定、输入控件分类规则、选区坐标转换、内存历史和标注渲染；`ShortcutTrigger` 适配鼠标与键盘事件，并过滤键盘长按重复。
+[Usage & development reference (中文)](docs/reference.zh-CN.md) · [Build from source](apps/handy-pick/README.md)
