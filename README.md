@@ -25,7 +25,7 @@ Prefer a keyboard shortcut? Set your own from the menu bar.
 ## Small app, useful extras
 
 - **Make screenshots clearer.** Resize the selection, draw lines and circles, or add text.
-- **Pick text from pictures.** Select words directly in an image and copy them with on-device OCR.
+- **Pick text from pictures.** Open a history image, select words, and copy. Text recognition stays on your Mac.
 - **Find what you just copied.** Browse image and text history, preview an item, and copy it again.
 
 Lives quietly in your menu bar. No account needed. Clipboard history stays in memory and clears when the app quits.

@@ -7,9 +7,10 @@ final class ImageTextSelectionTests: XCTestCase {
     @MainActor func testLiveTextRecognizesAndCopiesOnlySelectedRange() async throws {
         guard ImageAnalyzer.isSupported else { throw XCTSkip("Live Text unavailable on this host") }
         _ = NSApplication.shared
-        let view = ImageTextSelection(image: fixture(), frame: NSRect(x: 0, y: 0, width: 720, height: 280))
-        let window = NSPanel(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false; window.contentView = view
+        let content = HistoryImageEditor(image: fixture(), size: NSSize(width: 720, height: 480))
+        let window = NSPanel(contentRect: content.bounds, styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; window.contentView = content
+        let view = try XCTUnwrap(content.editor.textSelection)
         defer { view.stop(); window.close() }
         for _ in 0..<200 {
             if view.recognitionFinished { break }
@@ -38,15 +39,14 @@ final class ImageTextSelectionTests: XCTestCase {
         let panel = NSPanel(contentRect: content.bounds, styleMask: [.titled], backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false; panel.contentView = content; defer { panel.close() }
         let buttons = content.toolbar.content.subviews.compactMap { $0 as? NSButton }
-        let ocr = buttons.first { $0.tag == 6 }!
-        ocr.performClick(nil)
+        XCTAssertNil(buttons.first { $0.tag == 6 }, "History preview must not expose an OCR toggle")
         XCTAssertNotNil(content.editor.textSelection)
-        XCTAssertEqual(ocr.state, .on)
         panel.setContentSize(NSSize(width: 900, height: 600)); content.layoutSubtreeIfNeeded()
         XCTAssertEqual(content.editor.textSelection?.frame, content.editor.bounds)
         buttons.first { $0.tag == 2 }!.performClick(nil)
         XCTAssertNil(content.editor.textSelection)
-        XCTAssertEqual(ocr.state, .off)
+        buttons.first { $0.tag == 2 }!.performClick(nil)
+        XCTAssertNotNil(content.editor.textSelection, "Toggling the annotation tool off returns to text selection")
         var result: CGImage?
         content.editor.onComplete = { result = $0 }
         buttons.first { $0.tag == 5 }!.performClick(nil)

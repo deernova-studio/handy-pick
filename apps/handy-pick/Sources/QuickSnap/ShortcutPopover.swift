@@ -17,7 +17,7 @@ final class ShortcutPopover: NSViewController {
     private var selectedType = 0
     private let scroll = NSScrollView()
     private let separator = PaperlightSurface()
-    private let bindingButton = PaperlightButton(title: "", target: nil, action: nil)
+    private let bindingButton = NSButton(title: "", target: nil, action: nil)
     private let modeButton = NSPopUpButton(frame: .zero, pullsDown: true)
     private let grid = FlippedHistoryView()
     private var needsPermission = false
@@ -37,7 +37,7 @@ final class ShortcutPopover: NSViewController {
         bindingButton.frame = NSRect(x: 184, y: 16, width: 160, height: 24)
         bindingButton.target = self; bindingButton.action = #selector(record)
         bindingButton.font = Paperlight.label
-        bindingButton.style = .secondary; bindingButton.isBordered = false
+        bindingButton.controlSize = .regular; bindingButton.isBordered = true
         bindingButton.bezelStyle = .rounded
         bindingButton.setAccessibilityLabel("录入快捷键")
         bindingButton.toolTip = "点击后按新键，Esc 取消"
@@ -118,7 +118,11 @@ final class ShortcutPopover: NSViewController {
         typeFilter.isHidden = history.isEmpty
         filterDivider.isHidden = history.isEmpty
         let size = NSSize(width: entries.isEmpty ? 240 : 360, height: entries.isEmpty ? 56 : 64 + visibleHeight + 16)
-        bindingButton.frame = NSRect(x: 104, y: 16, width: 120, height: 24)
+        // AppKit bezel/shadow insets differ by control type and OS version.
+        // Align visible control rectangles instead of assigning equal outer frames.
+        modeButton.frame = modeButton.frame(forAlignmentRect: NSRect(x: 16, y: 16, width: 80, height: 24))
+        bindingButton.frame = bindingButton.frame(forAlignmentRect: NSRect(x: 104, y: 16, width: 120, height: 24))
+        typeFilter.frame = typeFilter.frame(forAlignmentRect: NSRect(x: 240, y: 16, width: 104, height: 24))
         if preferredContentSize != size {
             preferredContentSize = size
             onSizeChange?(size)

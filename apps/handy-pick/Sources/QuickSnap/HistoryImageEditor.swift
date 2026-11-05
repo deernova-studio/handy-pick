@@ -27,6 +27,6 @@ final class HistoryImageEditor: PaperlightSurface {
         editor.frame = NSRect(x: area.midX-size.width/2, y: area.midY-size.height/2, width: size.width, height: size.height)
         // Keep annotations in stable coordinates while the window is resized.
         editor.setBoundsSize(logicalSize)
-        toolbar.frame = NSRect(x: (bounds.width-SelectionView.toolbarWidth)/2, y: bounds.height-60, width: SelectionView.toolbarWidth, height: 44)
+        toolbar.frame = NSRect(x: (bounds.width-editor.toolbarContentWidth)/2, y: bounds.height-60, width: editor.toolbarContentWidth, height: 44)
     }
 }

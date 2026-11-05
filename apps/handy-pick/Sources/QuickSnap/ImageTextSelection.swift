@@ -10,9 +10,12 @@ import VisionKit
     private let feedback = CopyFeedback()
     private(set) var recognitionFinished = false
     private(set) var recognizedText = ""
+    var onConfirm: (() -> Void)?
+    private let quiet: Bool
     var onCancel: (() -> Void)?
 
-    init(image: CGImage, frame: NSRect) {
+    init(image: CGImage, frame: NSRect, quiet: Bool = false) {
+        self.quiet = quiet
         super.init(frame: frame)
         self.image = NSImage(cgImage: image, size: frame.size)
         imageScaling = .scaleAxesIndependently
@@ -25,6 +28,7 @@ import VisionKit
         status.backgroundColor = Paperlight.raised; status.drawsBackground = true
         status.alignment = .center
         status.setAccessibilityLabel("文字识别状态")
+        status.isHidden = quiet
         addSubview(status)
         guard ImageAnalyzer.isSupported else {
             status.stringValue = "此设备不支持文字识别"; recognitionFinished = true; return
@@ -37,13 +41,14 @@ import VisionKit
                 self.recognizedText = analysis.transcript
                 self.overlay.analysis = analysis
                 self.overlay.selectableItemsHighlighted = false
-                self.status.isHidden = analysis.hasResults(for: .text)
+                self.status.isHidden = self.quiet || analysis.hasResults(for: .text)
                 self.status.stringValue = "未识别到文字"
                 self.needsLayout = true
             } catch {
                 guard !Task.isCancelled, let self else { return }
                 self.recognitionFinished = true
-                self.status.stringValue = "识别失败，请重新点击识别"
+                self.status.stringValue = "识别失败，请重试"
+                self.toolTip = "文字识别失败，请重新打开图片"
                 self.needsLayout = true
             }
         }
@@ -65,7 +70,9 @@ import VisionKit
     }
     func overlayView(_ overlayView: ImageAnalysisOverlayView, shouldHandleKeyDownEvent event: NSEvent) -> Bool {
         if event.keyCode == 53 { onCancel?(); return false }
-        if event.keyCode == 36 || event.keyCode == 76 { copyText(allIfUnselected: true); return false }
+        if event.keyCode == 36 || event.keyCode == 76 {
+            if let onConfirm { onConfirm() } else { copyText(allIfUnselected: true) }; return false
+        }
         if event.modifierFlags.contains(.command), event.keyCode == 8 {
             copyText(allIfUnselected: false); return false
         }

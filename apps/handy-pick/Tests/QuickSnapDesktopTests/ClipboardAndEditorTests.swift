@@ -171,6 +171,13 @@ final class ClipboardAndEditorTests: XCTestCase {
         let imageID = history.entries[0].id
         panel.updateHistory(history.entries)
         let filter = panel.view.subviews.first { $0.identifier?.rawValue == "historyTypeFilter" } as! NSSegmentedControl
+        let mode = panel.view.subviews.compactMap { $0 as? NSPopUpButton }.first!
+        let binding = panel.view.subviews.compactMap { $0 as? NSButton }.first { !($0 is NSPopUpButton) }!
+        for control in [mode as NSView, binding, filter] {
+            let visual = control.alignmentRect(forFrame: control.frame)
+            XCTAssertEqual(visual.height, 24, accuracy: 0.01)
+            XCTAssertEqual(visual.midY, 28, accuracy: 0.01)
+        }
         let scroll = panel.view.subviews.compactMap { $0 as? NSScrollView }.first!
         scroll.contentView.scroll(to: NSPoint(x: 0, y: 120))
         func select(_ index: Int) {
@@ -253,7 +260,7 @@ final class ClipboardAndEditorTests: XCTestCase {
         defer { window.close() }
         let editor = content.editor
         let buttons = content.toolbar.content.subviews.compactMap { $0 as? NSButton }.sorted { $0.tag < $1.tag }
-        XCTAssertEqual(buttons.count, 7)
+        XCTAssertEqual(buttons.count, 6)
         XCTAssertEqual(buttons[2].title, "T"); XCTAssertTrue((buttons[2] as! PaperlightButton).drawsTitleInsteadOfImage)
         var rendered: CGImage?
         editor.onComplete = { rendered = $0 }
@@ -263,6 +270,7 @@ final class ClipboardAndEditorTests: XCTestCase {
             let location = editor.convert(point, to: nil)
             return mouse(kind, x: location.x, y: location.y)
         }
+        buttons[0].performClick(nil)
         editor.mouseDown(with: event(.leftMouseDown, CGPoint(x: 80, y: 80)))
         editor.mouseDragged(with: event(.leftMouseDragged, CGPoint(x: 400, y: 240)))
         editor.mouseUp(with: event(.leftMouseUp, CGPoint(x: 400, y: 240)))
