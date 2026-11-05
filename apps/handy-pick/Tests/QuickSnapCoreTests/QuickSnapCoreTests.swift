@@ -3,6 +3,27 @@ import CoreGraphics
 @testable import QuickSnapCore
 
 final class QuickSnapCoreTests: XCTestCase {
+    func testTerminalPasteRequiresFocusedSurfaceUnderPointerInForeground() {
+        let bounds = CGRect(x: 100, y: 100, width: 600, height: 400)
+        func allowed(bundle: String? = "com.apple.Terminal", role: String = "AXTextArea",
+                     secure: Bool = false, enabled: Bool? = nil, point: CGPoint = CGPoint(x: 200, y: 200),
+                     hit: Int32 = 10, focused: Int32 = 10, foreground: Int32 = 10) -> Bool {
+            InputPolicy.canPasteTerminal(bundleID: bundle, role: role, secure: secure, enabled: enabled,
+                point: point, bounds: bounds, hitPID: hit, focusedPID: focused, foregroundPID: foreground)
+        }
+        XCTAssertTrue(allowed())
+        XCTAssertFalse(allowed(bundle: "com.apple.TextEdit"))
+        XCTAssertFalse(allowed(bundle: nil))
+        for role in ["AXWindow", "AXGroup", "AXButton", "AXStaticText", "AXTextField"] {
+            XCTAssertFalse(allowed(role: role))
+        }
+        XCTAssertFalse(allowed(secure: true)); XCTAssertFalse(allowed(enabled: false))
+        XCTAssertFalse(allowed(point: CGPoint(x: 50, y: 200)))
+        XCTAssertFalse(allowed(point: CGPoint(x: 200, y: 80)))
+        XCTAssertFalse(allowed(hit: 11)); XCTAssertFalse(allowed(focused: 11)); XCTAssertFalse(allowed(foreground: 11))
+        XCTAssertFalse(InputPolicy.canPaste(role: "AXTextArea", secure: false, enabled: true,
+                                           editable: false, valueSettable: false))
+    }
     func testSelectionCopyPreservesWhitespaceAndRejectsCursorOrSecureFields() {
         XCTAssertTrue(InputPolicy.canCopySelection("你好 👋\nSecond line", secure: false))
         XCTAssertTrue(InputPolicy.canCopySelection(" \t\n", secure: false))

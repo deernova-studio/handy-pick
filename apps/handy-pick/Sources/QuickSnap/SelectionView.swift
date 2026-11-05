@@ -2,6 +2,8 @@ import AppKit
 import QuickSnapCore
 
 final class SelectionView: NSView, NSTextFieldDelegate {
+    static let toolbarWidth: CGFloat = 306
+    private(set) var textSelection: ImageTextSelection?
     let image: CGImage
     private let editsWholeImage: Bool
     var onComplete: ((CGImage?) -> Void)?
@@ -25,11 +27,12 @@ final class SelectionView: NSView, NSTextFieldDelegate {
     }
     override func setBoundsSize(_ newSize: NSSize) {
         super.setBoundsSize(newSize)
-        if editsWholeImage { selection = bounds }
+        if editsWholeImage { selection = bounds; textSelection?.frame = bounds }
     }
     required init?(coder: NSCoder) { fatalError("Not supported") }
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .crosshair)
+        if textSelection != nil { addCursorRect(selection, cursor: .arrow) }
         if editing && !editsWholeImage {
             for handle in SelectionGeometry.Handle.allCases.reversed() {
                 addCursorRect(handle.hitRect(on: selection).intersection(bounds), cursor: cursor(for: handle))
@@ -96,13 +99,14 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         let point = convert(event.locationInWindow, from: nil)
         if editing {
             if !editsWholeImage, let handle = SelectionGeometry.handle(at: point, on: selection) {
+                endTextSelection()
                 resizeDrag = (handle, point, selection)
                 toolbar?.isHidden = true
                 cursor(for: handle).set()
                 window?.invalidateCursorRects(for: self)
                 return
             }
-            guard selection.contains(point) else { return }
+            guard textSelection == nil, selection.contains(point) else { return }
             if tool == .text { beginText(at: point); return }
             start = point; draft = Annotation(kind: tool, start: point, end: point)
         } else { start = point; selection = .zero }
@@ -151,7 +155,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         CGPoint(x: min(max(point.x, selection.minX), selection.maxX), y: min(max(point.y, selection.minY), selection.maxY))
     }
     private func showToolbar() {
-        let width: CGFloat = 264, height: CGFloat = 44
+        let width = Self.toolbarWidth, height: CGFloat = 44
         var y = selection.maxY + 10
         if y + height > bounds.maxY - 8 { y = selection.minY - height - 10 }
         y = min(max(8, y), bounds.maxY-height-8)
@@ -162,19 +166,20 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         bar.isHidden = false; toolbar = bar; window?.invalidateCursorRects(for: self)
     }
     func makeToolbar() -> PaperlightGlass {
-        let bar = PaperlightGlass(frame: NSRect(x: 0, y: 0, width: 264, height: 44), radius: 22)
-        let symbols = ["line.diagonal", "circle", "textformat", "arrow.uturn.backward", "xmark", "checkmark"]
-        let labels = ["划线", "画圈", "文字", "撤销", "取消", editsWholeImage ? "复制图片" : "复制截图"]
-        for index in symbols.indices {
+        let bar = PaperlightGlass(frame: NSRect(x: 0, y: 0, width: Self.toolbarWidth, height: 44), radius: 22)
+        let symbols = ["line.diagonal", "circle", "textformat", "arrow.uturn.backward", "xmark", "checkmark", "text.viewfinder"]
+        let labels = ["划线", "画圈", "文字", "撤销", "取消", editsWholeImage ? "复制图片" : "复制截图", "识别并选取文字"]
+        for (position, index) in [0, 1, 2, 6, 3, 4, 5].enumerated() {
             let button = PaperlightButton(image: NSImage(systemSymbolName: symbols[index], accessibilityDescription: labels[index])!, target: self, action: #selector(toolbarClicked(_:)))
             if index == 2 { button.image = nil; button.drawsTitleInsteadOfImage = true; button.title = "T"; button.font = .systemFont(ofSize: 18, weight: .semibold) }
-            button.frame = NSRect(x: 8 + CGFloat(index)*42, y: 4, width: 36, height: 36)
+            button.frame = NSRect(x: 8 + CGFloat(position)*42, y: 4, width: 36, height: 36)
             button.tag = index; button.isBordered = false; button.cornerRadius = 18; button.toolTip = labels[index]
-            button.setAccessibilityLabel(labels[index]); button.setButtonType(index < 3 ? .toggle : .momentaryPushIn)
+            button.setAccessibilityLabel(labels[index]); button.setButtonType(index < 3 || index == 6 ? .toggle : .momentaryPushIn)
             button.style = index == 5 ? .primary : .plain
             button.isOnGlass = true
             bar.content.addSubview(button); toolButtons.append(button)
         }
+        toolButtons.sort { $0.tag < $1.tag }
         toolButtons[0].state = .on
         return bar
     }
@@ -182,13 +187,49 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         commitText(); window?.makeFirstResponder(self)
         switch sender.tag {
         case 0...2:
+            endTextSelection()
             tool = [.line, .ellipse, .text][sender.tag]
             for button in toolButtons.prefix(3) { button.state = button.tag == sender.tag ? .on : .off }
-        case 3: undoAnnotation()
+        case 3: endTextSelection(); undoAnnotation()
         case 4: onComplete?(nil)
         case 5: complete()
+        case 6: toggleTextSelection()
         default: break
         }
+    }
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let local = convert(point, from: superview)
+        if editing && !editsWholeImage && SelectionGeometry.handle(at: local, on: selection) != nil,
+           !(toolbar?.frame.contains(local) ?? false) { return self }
+        return super.hitTest(point)
+    }
+    private func toggleTextSelection() {
+        if textSelection != nil { endTextSelection(); return }
+        guard let crop = AnnotationRenderer.render(image: image, selection: selection, logicalSize: bounds.size, annotations: annotations) else { return }
+        let layer = ImageTextSelection(image: crop, frame: selection)
+        layer.onCancel = { [weak self] in self?.endTextSelection(); self?.window?.makeFirstResponder(self) }
+        textSelection = layer
+        addSubview(layer, positioned: .below, relativeTo: toolbar)
+        for button in toolButtons { if button.tag < 3 || button.tag == 6 { button.state = button.tag == 6 ? .on : .off } }
+        toolButtons.first { $0.tag == 5 }?.toolTip = "复制文字（未选中时复制全部）"
+        toolButtons.first { $0.tag == 5 }?.setAccessibilityLabel("复制文字")
+        window?.invalidateCursorRects(for: self)
+    }
+    private func endTextSelection() {
+        textSelection?.stop(); textSelection?.removeFromSuperview(); textSelection = nil
+        for button in toolButtons {
+            if button.tag < 3 { button.state = [.line, .ellipse, .text][button.tag] == tool ? .on : .off }
+            if button.tag == 6 { button.state = .off }
+            if button.tag == 5 {
+                button.toolTip = editsWholeImage ? "复制图片" : "复制截图"
+                button.setAccessibilityLabel(button.toolTip)
+            }
+        }
+        window?.invalidateCursorRects(for: self)
+    }
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow == nil { endTextSelection() }
+        super.viewWillMove(toWindow: newWindow)
     }
     private func beginText(at point: CGPoint) {
         textOrigin = point
@@ -217,15 +258,17 @@ final class SelectionView: NSView, NSTextFieldDelegate {
     }
     private func undoAnnotation() { if !annotations.isEmpty { annotations.removeLast(); needsDisplay = true } }
     private func complete() {
+        if let textSelection { textSelection.copyText(allIfUnselected: true); return }
         commitText()
         guard let rendered = AnnotationRenderer.render(image: image, selection: selection, logicalSize: bounds.size, annotations: annotations) else { NSSound.beep(); return }
         onComplete?(rendered)
     }
     override func rightMouseDown(with event: NSEvent) { onComplete?(nil) }
     override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { onComplete?(nil) }
+        if event.keyCode == 53 { if textSelection != nil { endTextSelection() } else { onComplete?(nil) } }
+        else if let textSelection, event.modifierFlags.contains(.command), event.keyCode == 8 { textSelection.copyText(allIfUnselected: false) }
         else if editing && (event.keyCode == 36 || event.keyCode == 76) { complete() }
-        else if editing && event.modifierFlags.contains(.command) && event.keyCode == 6 { commitText(); undoAnnotation() }
+        else if editing && event.modifierFlags.contains(.command) && event.keyCode == 6 { endTextSelection(); commitText(); undoAnnotation() }
         else { super.keyDown(with: event) }
     }
 }

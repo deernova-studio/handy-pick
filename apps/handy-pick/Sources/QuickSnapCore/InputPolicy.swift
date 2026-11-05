@@ -22,6 +22,16 @@ public enum InputPolicy {
         return role == "AXGroup" && (webEditableHost || (editable == true && (valueSettable || selectedTextSettable)))
     }
 
+    /// Terminal displays a read-only screen buffer but accepts keyboard paste.
+    /// Scope this exception to its focused terminal surface, never generic text areas.
+    public static func canPasteTerminal(bundleID: String?, role: String, secure: Bool, enabled: Bool?,
+                                        point: CGPoint, bounds: CGRect, hitPID: Int32,
+                                        focusedPID: Int32, foregroundPID: Int32) -> Bool {
+        guard bundleID == "com.apple.Terminal", role == "AXTextArea", !secure, enabled != false else { return false }
+        return canUseFocusedInput(at: point, bounds: bounds, hitPID: hitPID,
+                                  focusedPID: focusedPID, foregroundPID: foregroundPID)
+    }
+
     public static func canUseFocusedInput(at point: CGPoint, bounds: CGRect,
                                           hitPID: Int32, focusedPID: Int32, foregroundPID: Int32) -> Bool {
         guard focusedPID > 0, hitPID == focusedPID, foregroundPID == focusedPID,

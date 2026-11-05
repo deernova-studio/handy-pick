@@ -11,6 +11,10 @@ final class ShortcutPopover: NSViewController {
     var onPreview: ((UUID) -> Void)?
     var onModeChange: ((ShortcutMode) -> Void)?
     var onSizeChange: ((NSSize) -> Void)?
+    private let typeFilter = NSSegmentedControl()
+    private let filterDivider = PaperlightSurface()
+    private var history: [ClipboardHistory.Entry] = []
+    private var selectedType = 0
     private let scroll = NSScrollView()
     private let separator = PaperlightSurface()
     private let bindingButton = PaperlightButton(title: "", target: nil, action: nil)
@@ -44,6 +48,23 @@ final class ShortcutPopover: NSViewController {
         scroll.scrollerStyle = .overlay
         scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
         scroll.documentView = grid; root.addSubview(scroll)
+        typeFilter.frame = NSRect(x: 240, y: 16, width: 104, height: 24)
+        filterDivider.frame = NSRect(x: 232, y: 18, width: Paperlight.hairline(root), height: 20)
+        filterDivider.fill = Paperlight.line; root.addSubview(filterDivider)
+        typeFilter.identifier = NSUserInterfaceItemIdentifier("historyTypeFilter")
+        typeFilter.segmentCount = 3; typeFilter.trackingMode = .selectOne
+        typeFilter.segmentStyle = .rounded; typeFilter.controlSize = .regular
+        typeFilter.target = self; typeFilter.action = #selector(selectHistoryType(_:))
+        typeFilter.setAccessibilityLabel("剪贴板类型")
+        for (index, item) in [("square.grid.2x2", "全部"), ("photo", "图片"), ("text.alignleft", "文字")].enumerated() {
+            let image = NSImage(systemSymbolName: item.0, accessibilityDescription: item.1)!
+                .withSymbolConfiguration(.init(pointSize: 13, weight: .medium))!
+            typeFilter.setImage(image, forSegment: index)
+            typeFilter.setImageScaling(.scaleProportionallyDown, forSegment: index)
+            typeFilter.setWidth(28, forSegment: index)
+            typeFilter.setToolTip(item.1, forSegment: index)
+        }
+        root.addSubview(typeFilter)
         let menu = NSMenu()
         let clear = NSMenuItem(title: "清空记录", action: #selector(clearHistory), keyEquivalent: "")
         clear.target = self; menu.addItem(clear); root.menu = menu; grid.menu = menu
@@ -62,20 +83,42 @@ final class ShortcutPopover: NSViewController {
     }
     func updateHistory(_ entries: [ClipboardHistory.Entry]) {
         loadViewIfNeeded()
+        history = entries
+        let imageCount = entries.filter { if case .image = $0.content { return true }; return false }.count
+        let counts = [entries.count, imageCount, entries.count-imageCount]
+        if counts[selectedType] == 0 { selectedType = 0 }
+        for index in 0..<3 { typeFilter.setEnabled(counts[index] > 0, forSegment: index) }
+        renderHistory()
+    }
+    @objc private func selectHistoryType(_ sender: NSSegmentedControl) {
+        selectedType = sender.selectedSegment
+        scroll.contentView.scroll(to: .zero)
+        renderHistory()
+    }
+    private func renderHistory() {
+        typeFilter.selectedSegment = selectedType
+        let entries = history.filter {
+            switch $0.content {
+            case .image: return selectedType != 2
+            case .text: return selectedType != 1
+            }
+        }
         grid.subviews.forEach { $0.removeFromSuperview() }
         let rows = (entries.count + 2) / 3
         let contentHeight = max(0, CGFloat(rows) * 120 - 8)
         let visibleHeight = max(0, CGFloat(min(rows, 3)) * 120 - 8)
         let previousOrigin = scroll.contentView.bounds.origin
-        scroll.setFrameSize(NSSize(width: 328, height: visibleHeight))
+        scroll.frame = NSRect(x: 16, y: 64, width: 328, height: visibleHeight)
         grid.frame = NSRect(x: 0, y: 0, width: 328, height: contentHeight)
         scroll.hasVerticalScroller = rows > 3
         scroll.contentView.scroll(to: NSPoint(x: 0, y: min(max(0, previousOrigin.y), max(0, contentHeight-visibleHeight))))
         scroll.reflectScrolledClipView(scroll.contentView)
         scroll.isHidden = entries.isEmpty
         separator.isHidden = entries.isEmpty
+        typeFilter.isHidden = history.isEmpty
+        filterDivider.isHidden = history.isEmpty
         let size = NSSize(width: entries.isEmpty ? 240 : 360, height: entries.isEmpty ? 56 : 64 + visibleHeight + 16)
-        bindingButton.frame = NSRect(x: 104, y: 16, width: size.width - 120, height: 24)
+        bindingButton.frame = NSRect(x: 104, y: 16, width: 120, height: 24)
         if preferredContentSize != size {
             preferredContentSize = size
             onSizeChange?(size)

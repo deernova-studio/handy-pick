@@ -94,6 +94,7 @@ import QuickSnapCore
         var hitPID: pid_t = 0
         guard AXUIElementGetPid(hit, &hitPID) == .success,
               hitPID > 0, hitPID != ProcessInfo.processInfo.processIdentifier else { return nil }
+        if let terminal = focusedTerminal(at: point, hitPID: hitPID) { return terminal }
         let deadline = ProcessInfo.processInfo.systemUptime + 0.35
         var current: AXUIElement? = hit
         // Text inside a web editor may be a child of the editable control.
@@ -133,6 +134,25 @@ import QuickSnapCore
               InputPolicy.canUseFocusedInput(at: point, bounds: bounds, hitPID: hitPID,
                   focusedPID: target.pid, foregroundPID: NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0) else { return nil }
         return target
+    }
+
+    private static func focusedTerminal(at point: CGPoint, hitPID: pid_t) -> InputTarget? {
+        let bundleID = NSRunningApplication(processIdentifier: hitPID)?.bundleIdentifier
+        guard bundleID == "com.apple.Terminal" else { return nil }
+        let app = AXUIElementCreateApplication(hitPID)
+        AXUIElementSetMessagingTimeout(app, 0.1)
+        guard let focused = elementAttribute(app, kAXFocusedUIElementAttribute) else { return nil }
+        AXUIElementSetMessagingTimeout(focused, 0.1)
+        var focusedPID: pid_t = 0
+        guard AXUIElementGetPid(focused, &focusedPID) == .success,
+              let rect = bounds(of: focused),
+              InputPolicy.canPasteTerminal(bundleID: bundleID,
+                role: attribute(focused, kAXRoleAttribute) as? String ?? "",
+                secure: attribute(focused, kAXSubroleAttribute) as? String == kAXSecureTextFieldSubrole as String,
+                enabled: attribute(focused, kAXEnabledAttribute) as? Bool,
+                point: point, bounds: rect, hitPID: hitPID, focusedPID: focusedPID,
+                foregroundPID: NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0) else { return nil }
+        return InputTarget(element: focused, pid: focusedPID)
     }
 
     private static func target(for element: AXUIElement, webHost: Bool = false) -> InputTarget? {

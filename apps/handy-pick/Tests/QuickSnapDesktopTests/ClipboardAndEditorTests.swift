@@ -49,8 +49,8 @@ final class ClipboardAndEditorTests: XCTestCase {
         view.mouseUp(with: mouse(.leftMouseUp, x: 600, y: 120))
         XCTAssertNil(result)
         let bar = view.subviews.compactMap { $0 as? PaperlightGlass }.first!
-        let buttons = bar.content.subviews.compactMap { $0 as? NSButton }
-        XCTAssertEqual(buttons.count, 6)
+        let buttons = bar.content.subviews.compactMap { $0 as? NSButton }.sorted { $0.tag < $1.tag }
+        XCTAssertEqual(buttons.count, 7)
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(bar.content.frame.size, bar.bounds.size)
         view.mouseDown(with: mouse(.leftMouseDown, x: 150, y: 250))
@@ -89,7 +89,7 @@ final class ClipboardAndEditorTests: XCTestCase {
         }
         drag(80, 100, 600, 360)
         let bar = view.subviews.compactMap { $0 as? PaperlightGlass }.first!
-        let buttons = bar.content.subviews.compactMap { $0 as? NSButton }
+        let buttons = bar.content.subviews.compactMap { $0 as? NSButton }.sorted { $0.tag < $1.tag }
         var result: CGImage?
         view.onComplete = { result = $0 }
         drag(150, 200, 400, 200)
@@ -161,13 +161,52 @@ final class ClipboardAndEditorTests: XCTestCase {
         XCTAssertEqual(panel.preferredContentSize, NSSize(width: 240, height: 56))
         savePreview(panel.view, "clipboard-empty-dark.png")
     }
+    @MainActor func testHistoryTypeFiltersPreserveEntryActionsAndResetWhenEmpty() {
+        _ = NSApplication.shared
+        let panel = ShortcutPopover()
+        var history = ClipboardHistory()
+        for index in 0..<11 { history.insert(.text("Text \(index)")) }
+        let png = NSBitmapImageRep(cgImage: fixture()).representation(using: .png, properties: [:])!
+        history.insert(.image(png, type: NSPasteboard.PasteboardType.png.rawValue))
+        let imageID = history.entries[0].id
+        panel.updateHistory(history.entries)
+        let filter = panel.view.subviews.first { $0.identifier?.rawValue == "historyTypeFilter" } as! NSSegmentedControl
+        let scroll = panel.view.subviews.compactMap { $0 as? NSScrollView }.first!
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 120))
+        func select(_ index: Int) {
+            filter.selectedSegment = index; filter.sendAction(filter.action, to: filter.target)
+        }
+        select(1)
+        XCTAssertEqual(scroll.documentView?.subviews.count, 1)
+        XCTAssertEqual(scroll.contentView.bounds.origin.y, 0)
+        XCTAssertEqual(panel.preferredContentSize.height, 192)
+        var copied: UUID?; var previewed: UUID?
+        panel.onSelect = { copied = $0 }; panel.onPreview = { previewed = $0 }
+        let tile = scroll.documentView!.subviews.first as! HistoryTile
+        tile.performClick(nil)
+        (tile.subviews.first as! NSButton).performClick(nil)
+        XCTAssertEqual(copied, imageID); XCTAssertEqual(previewed, imageID)
+        select(2)
+        XCTAssertEqual(scroll.documentView?.subviews.count, 11)
+        XCTAssertTrue(scroll.hasVerticalScroller)
+        XCTAssertEqual(panel.preferredContentSize.height, 432)
+        history.insert(.text("Newest text")); panel.updateHistory(history.entries)
+        XCTAssertEqual(filter.selectedSegment, 2)
+        select(1)
+        panel.updateHistory(history.entries.filter { $0.id != imageID })
+        XCTAssertEqual(filter.selectedSegment, 0)
+        XCTAssertFalse(filter.isEnabled(forSegment: 1))
+        panel.updateHistory([])
+        XCTAssertTrue(filter.isHidden)
+        XCTAssertEqual(panel.preferredContentSize, NSSize(width: 240, height: 56))
+    }
     @MainActor func testPreviewButtonDoesNotCopyAndHoverRevealsIt() {
         _ = NSApplication.shared
         var history = ClipboardHistory(); history.insert(.text("Preview without changing clipboard"))
         let panel = ShortcutPopover(); panel.updateHistory(history.entries)
         let scroll = panel.view.subviews.compactMap { $0 as? NSScrollView }.first!
         let tile = scroll.documentView!.subviews.first as! HistoryTile
-        let expand = tile.subviews.compactMap { $0 as? NSButton }.first!
+        let expand = tile.subviews.compactMap { $0 as? NSButton }.sorted { $0.tag < $1.tag }.first!
         var copied = false; var previewed: UUID?
         panel.onSelect = { _ in copied = true }; panel.onPreview = { previewed = $0 }
         XCTAssertTrue(expand.isHidden)
@@ -213,8 +252,8 @@ final class ClipboardAndEditorTests: XCTestCase {
         window.isReleasedWhenClosed = false; window.contentView = content
         defer { window.close() }
         let editor = content.editor
-        let buttons = content.toolbar.content.subviews.compactMap { $0 as? NSButton }
-        XCTAssertEqual(buttons.count, 6)
+        let buttons = content.toolbar.content.subviews.compactMap { $0 as? NSButton }.sorted { $0.tag < $1.tag }
+        XCTAssertEqual(buttons.count, 7)
         XCTAssertEqual(buttons[2].title, "T"); XCTAssertTrue((buttons[2] as! PaperlightButton).drawsTitleInsteadOfImage)
         var rendered: CGImage?
         editor.onComplete = { rendered = $0 }
