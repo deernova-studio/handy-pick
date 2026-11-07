@@ -12,7 +12,9 @@ final class SelectionView: NSView, NSTextFieldDelegate {
     private var selection: CGRect = .zero
     private var editing = false
     private var resizeDrag: (handle: SelectionGeometry.Handle, origin: CGPoint, rect: CGRect)?
-    private var tool: Annotation.Kind = .line
+    private var moveDrag: (origin: CGPoint, rect: CGRect)?
+    private var moveDidStart = false
+    private var tool: Annotation.Kind?
     private var annotations: [Annotation] = []
     private var draft: Annotation?
     private var toolbar: PaperlightGlass?
@@ -35,6 +37,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         addCursorRect(bounds, cursor: .crosshair)
         if textSelection != nil { addCursorRect(selection, cursor: .arrow) }
         if editing && !editsWholeImage {
+            if tool == nil, textSelection == nil { addCursorRect(selection, cursor: .openHand) }
             for handle in SelectionGeometry.Handle.allCases.reversed() {
                 addCursorRect(handle.hitRect(on: selection).intersection(bounds), cursor: cursor(for: handle))
             }
@@ -109,11 +112,27 @@ final class SelectionView: NSView, NSTextFieldDelegate {
             }
             guard textSelection == nil, selection.contains(point) else { return }
             if tool == .text { beginText(at: point); return }
-            start = point; draft = Annotation(kind: tool, start: point, end: point)
+            // Match the toolbar checkmark. Leave text editing, Live Text and
+            // resize handles to their own double-click interactions.
+            if !editsWholeImage, event.clickCount == 2 {
+                start = nil; draft = nil
+                complete()
+                return
+            }
+            if let tool {
+                start = point; draft = Annotation(kind: tool, start: point, end: point)
+            } else if !editsWholeImage {
+                moveDrag = (point, selection)
+                moveDidStart = false
+            }
         } else { start = point; selection = .zero }
         needsDisplay = true
     }
     override func mouseDragged(with event: NSEvent) {
+        if let drag = moveDrag {
+            move(to: convert(event.locationInWindow, from: nil), drag: drag)
+            if moveDidStart { NSCursor.closedHand.set() }; return
+        }
         if let drag = resizeDrag {
             resize(to: convert(event.locationInWindow, from: nil), drag: drag)
             cursor(for: drag.handle).set()
@@ -126,6 +145,11 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         needsDisplay = true
     }
     override func mouseUp(with event: NSEvent) {
+        if let drag = moveDrag {
+            move(to: convert(event.locationInWindow, from: nil), drag: drag)
+            moveDrag = nil; moveDidStart = false
+            showToolbar(); NSCursor.openHand.set(); return
+        }
         if let drag = resizeDrag {
             resize(to: convert(event.locationInWindow, from: nil), drag: drag)
             resizeDrag = nil
@@ -151,6 +175,20 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         selection = SelectionGeometry.resized(drag.rect, handle: drag.handle,
             delta: CGPoint(x: point.x-drag.origin.x, y: point.y-drag.origin.y), in: bounds)
         needsDisplay = true
+    }
+    private func move(to point: CGPoint, drag: (origin: CGPoint, rect: CGRect)) {
+        if !moveDidStart {
+            guard hypot(point.x-drag.origin.x, point.y-drag.origin.y) >= 3 else { return }
+            moveDidStart = true; toolbar?.isHidden = true
+        }
+        let next = SelectionGeometry.moved(drag.rect,
+            delta: CGPoint(x: point.x-drag.origin.x, y: point.y-drag.origin.y), in: bounds)
+        let dx = next.minX-selection.minX, dy = next.minY-selection.minY
+        for index in annotations.indices {
+            annotations[index].start.x += dx; annotations[index].start.y += dy
+            annotations[index].end.x += dx; annotations[index].end.y += dy
+        }
+        selection = next; needsDisplay = true
     }
     private func clamped(_ point: CGPoint) -> CGPoint {
         CGPoint(x: min(max(point.x, selection.minX), selection.maxX), y: min(max(point.y, selection.minY), selection.maxY))
@@ -182,20 +220,24 @@ final class SelectionView: NSView, NSTextFieldDelegate {
             bar.content.addSubview(button); toolButtons.append(button)
         }
         toolButtons.sort { $0.tag < $1.tag }
-        toolButtons[0].state = .on
         return bar
     }
     @objc private func toolbarClicked(_ sender: NSButton) {
         commitText(); window?.makeFirstResponder(self)
         switch sender.tag {
         case 0...2:
-            if editsWholeImage, textSelection == nil, tool == [.line, .ellipse, .text][sender.tag] {
-                beginTextSelection(); return
+            if textSelection == nil, tool == [.line, .ellipse, .text][sender.tag] {
+                tool = nil
+                for button in toolButtons.prefix(3) { button.state = .off }
+                if editsWholeImage { beginTextSelection() }
+                window?.invalidateCursorRects(for: self)
+                return
             }
             endTextSelection()
             tool = [.line, .ellipse, .text][sender.tag]
             for button in toolButtons.prefix(3) { button.state = button.tag == sender.tag ? .on : .off }
-        case 3: endTextSelection(); undoAnnotation()
+            window?.invalidateCursorRects(for: self)
+        case 3: undoAnnotation()
         case 4: onComplete?(nil)
         case 5: complete()
         case 6: toggleTextSelection()
@@ -221,6 +263,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
             else { self.endTextSelection(); self.window?.makeFirstResponder(self) }
         }
         layer.onConfirm = { [weak self] in self?.complete() }
+        layer.onUndo = { [weak self] in self?.undoAnnotation() }
         textSelection = layer
         addSubview(layer, positioned: .below, relativeTo: toolbar)
         for button in toolButtons { if button.tag < 3 || button.tag == 6 { button.state = button.tag == 6 ? .on : .off } }
@@ -275,7 +318,12 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         }
         return false
     }
-    private func undoAnnotation() { if !annotations.isEmpty { annotations.removeLast(); needsDisplay = true } }
+    private func undoAnnotation() {
+        let restoreSelection = editsWholeImage && textSelection != nil
+        endTextSelection(); commitText()
+        if !annotations.isEmpty { annotations.removeLast(); needsDisplay = true }
+        if restoreSelection { beginTextSelection() }
+    }
     private func complete() {
         if let textSelection {
             if !editsWholeImage || !textSelection.overlay.selectedText.isEmpty {
@@ -295,7 +343,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         }
         else if let textSelection, event.modifierFlags.contains(.command), event.keyCode == 8 { textSelection.copyText(allIfUnselected: false) }
         else if editing && (event.keyCode == 36 || event.keyCode == 76) { complete() }
-        else if editing && event.modifierFlags.contains(.command) && event.keyCode == 6 { endTextSelection(); commitText(); undoAnnotation() }
+        else if editing && event.modifierFlags.contains(.command) && event.keyCode == 6 { undoAnnotation() }
         else { super.keyDown(with: event) }
     }
 }

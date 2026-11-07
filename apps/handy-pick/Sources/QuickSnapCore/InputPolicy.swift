@@ -2,6 +2,24 @@ import CoreGraphics
 
 /// Only confirmed editable text controls are eligible for automatic paste.
 public enum InputPolicy {
+    public static func isEmbeddedTerminalInput(role: String, classes: [String], secure: Bool, enabled: Bool?) -> Bool {
+        !secure && enabled != false && ["AXTextArea", "AXTextField"].contains(role)
+            && classes.contains("xterm-helper-textarea")
+    }
+
+    public static func isEmbeddedTerminalSurface(classes: [String]) -> Bool {
+        classes.contains("xterm") || classes.contains("xterm-screen")
+    }
+
+    public static func canUseEmbeddedTerminalSurface(hitInsideSurface: Bool, hitIsAncestorContainer: Bool,
+                                                     point: CGPoint, bounds: CGRect, hitPID: Int32,
+                                                     focusedPID: Int32, foregroundPID: Int32) -> Bool {
+        // Chromium may hit-test canvas-rendered text to an enclosing container.
+        // The hit relationship may widen, but the eligible rectangle never does.
+        (hitInsideSurface || hitIsAncestorContainer) && canUseFocusedInput(at: point, bounds: bounds,
+            hitPID: hitPID, focusedPID: focusedPID, foregroundPID: foregroundPID)
+    }
+
     public static func canCopySelection(_ text: String?, secure: Bool) -> Bool {
         // Whitespace is valid selected content; an insertion cursor is not.
         !secure && !(text?.isEmpty ?? true)

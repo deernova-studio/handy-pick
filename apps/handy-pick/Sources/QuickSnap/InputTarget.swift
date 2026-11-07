@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import QuickSnapCore
+import OSLog
 
 @MainActor struct InputTarget {
     enum Action {
@@ -11,6 +12,9 @@ import QuickSnapCore
     }
     let element: AXUIElement
     let pid: pid_t
+    // Codex's xterm selection is not a DOM/AX text selection. On macOS its
+    // native Cmd-C copy event reads the terminal's own selection.
+    var copyTerminalSelectionFirst = false
 
     static func resolve(at point: CGPoint, foregroundPID: pid_t) async -> Action {
         let enabledWebAccessibility = enableWebAccessibility(for: foregroundPID)
@@ -18,8 +22,12 @@ import QuickSnapCore
         if enabledWebAccessibility { try? await Task.sleep(for: .milliseconds(100)) }
         for attempt in 0..<(enabledWebAccessibility ? 4 : 1) {
             guard NSWorkspace.shared.frontmostApplication?.processIdentifier == foregroundPID else { return .unavailable }
+            let input = at(point)
+            // xterm's helper may retain a prior paste in AXSelectedText. Ask the
+            // terminal to copy its real selection instead of trusting that buffer.
+            if let input, input.pid == foregroundPID, input.copyTerminalSelectionFirst { return .paste(input) }
             if let text = selectedText(at: point, foregroundPID: foregroundPID) { return .copy(text) }
-            if let target = at(point), target.pid == foregroundPID { return .paste(target) }
+            if let input, input.pid == foregroundPID { return .paste(input) }
             if attempt < 3, enabledWebAccessibility { try? await Task.sleep(for: .milliseconds(80)) }
         }
         return .capture
@@ -95,6 +103,7 @@ import QuickSnapCore
         guard AXUIElementGetPid(hit, &hitPID) == .success,
               hitPID > 0, hitPID != ProcessInfo.processInfo.processIdentifier else { return nil }
         if let terminal = focusedTerminal(at: point, hitPID: hitPID) { return terminal }
+        if let terminal = focusedEmbeddedTerminal(at: point, hit: hit, hitPID: hitPID) { return terminal }
         let deadline = ProcessInfo.processInfo.systemUptime + 0.35
         var current: AXUIElement? = hit
         // Text inside a web editor may be a child of the editable control.
@@ -155,6 +164,68 @@ import QuickSnapCore
         return InputTarget(element: focused, pid: focusedPID)
     }
 
+    private static func focusedEmbeddedTerminal(at point: CGPoint, hit: AXUIElement, hitPID: pid_t) -> InputTarget? {
+        guard NSRunningApplication(processIdentifier: hitPID)?.bundleIdentifier == "com.openai.codex" else { return nil }
+        let app = AXUIElementCreateApplication(hitPID)
+        AXUIElementSetMessagingTimeout(app, 0.1)
+        guard let focused = elementAttribute(app, kAXFocusedUIElementAttribute) else { return nil }
+        AXUIElementSetMessagingTimeout(focused, 0.1)
+        var focusedPID: pid_t = 0
+        guard AXUIElementGetPid(focused, &focusedPID) == .success, focusedPID == hitPID else { return nil }
+        let classes = attribute(focused, kAXDOMClassListAttribute as String) as? [String] ?? []
+        let isHelper = InputPolicy.isEmbeddedTerminalInput(
+            role: attribute(focused, kAXRoleAttribute) as? String ?? "", classes: classes,
+            secure: attribute(focused, kAXSubroleAttribute) as? String == kAXSecureTextFieldSubrole as String,
+            enabled: attribute(focused, kAXEnabledAttribute) as? Bool)
+        guard isHelper else {
+            Logger(subsystem: "studio.deernova.quick-snap", category: "gesture").notice("embedded-terminal-helper-not-found")
+            return nil
+        }
+        // The helper textarea covers the cursor, not the terminal. Require the
+        // pointer hit and focused helper to share an explicitly identified xterm
+        // surface. Never expand eligibility to the whole app or web document.
+        let focusAncestors = ancestors(of: focused)
+        let hitAncestors = ancestors(of: hit)
+        var surfaces = 0
+        var relatedSurfaces = 0, containingSurfaces = 0
+        let hitIsContainer = ["AXGroup", "AXWebArea", "AXScrollArea"].contains(attribute(hit, kAXRoleAttribute) as? String ?? "")
+        for surface in focusAncestors {
+            let classes = attribute(surface, kAXDOMClassListAttribute as String) as? [String] ?? []
+            guard InputPolicy.isEmbeddedTerminalSurface(classes: classes) else { continue }
+            surfaces += 1
+            let hitInside = hitAncestors.contains(where: { CFEqual($0, surface) })
+            let hitAbove = hitIsContainer && ancestors(of: surface).contains(where: { CFEqual($0, hit) })
+            if hitInside || hitAbove { relatedSurfaces += 1 }
+            if bounds(of: surface)?.contains(point) == true { containingSurfaces += 1 }
+            guard let rect = bounds(of: surface),
+                  InputPolicy.canUseEmbeddedTerminalSurface(
+                    hitInsideSurface: hitInside, hitIsAncestorContainer: hitAbove,
+                    point: point, bounds: rect, hitPID: hitPID,
+                    focusedPID: hitPID, foregroundPID: NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0) else { continue }
+            Logger(subsystem: "studio.deernova.quick-snap", category: "gesture").notice("embedded-terminal-surface-found")
+            return InputTarget(element: focused, pid: hitPID, copyTerminalSelectionFirst: true)
+        }
+        // Fixed structural metadata only; never terminal text, labels or values.
+        Logger(subsystem: "studio.deernova.quick-snap", category: "gesture").notice("embedded-terminal-helper-only surfaces=\(surfaces, privacy: .public) related=\(relatedSurfaces, privacy: .public) containing=\(containingSurfaces, privacy: .public)")
+        return nil
+    }
+
+    private static func ancestors(of start: AXUIElement) -> [AXUIElement] {
+        var result: [AXUIElement] = [], current: AXUIElement? = start
+        let deadline = ProcessInfo.processInfo.systemUptime + 0.2
+        for _ in 0..<12 {
+            guard let element = current, ProcessInfo.processInfo.systemUptime < deadline else { break }
+            AXUIElementSetMessagingTimeout(element, 0.05)
+            let role = attribute(element, kAXRoleAttribute) as? String ?? ""
+            if [kAXWindowRole as String, kAXApplicationRole as String].contains(role) { break }
+            result.append(element)
+            if role == "AXWebArea" { break }
+            guard let parent = elementAttribute(element, kAXParentAttribute), !CFEqual(parent, element) else { break }
+            current = parent
+        }
+        return result
+    }
+
     private static func target(for element: AXUIElement, webHost: Bool = false) -> InputTarget? {
         AXUIElementSetMessagingTimeout(element, 0.1)
         let role = attribute(element, kAXRoleAttribute) as? String ?? ""
@@ -195,6 +266,8 @@ import QuickSnapCore
     }
 
     func focus() {
+        // Refocusing an already focused web textarea can reset its selection.
+        if isFocused() { return }
         if NSWorkspace.shared.frontmostApplication?.processIdentifier != pid {
             NSRunningApplication(processIdentifier: pid)?.activate(options: [])
         }

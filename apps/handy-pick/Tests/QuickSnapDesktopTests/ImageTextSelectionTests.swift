@@ -47,6 +47,17 @@ final class ImageTextSelectionTests: XCTestCase {
         XCTAssertNil(content.editor.textSelection)
         buttons.first { $0.tag == 2 }!.performClick(nil)
         XCTAssertNotNil(content.editor.textSelection, "Toggling the annotation tool off returns to text selection")
+        let prior = content.editor.textSelection
+        buttons.first { $0.tag == 3 }!.performClick(nil)
+        XCTAssertNotNil(content.editor.textSelection, "Undo must keep history text selectable")
+        XCTAssertFalse(content.editor.textSelection === prior, "Undo must reanalyze the updated image")
+        let afterToolbarUndo = content.editor.textSelection
+        let undoKey = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
+            timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "z",
+            charactersIgnoringModifiers: "z", isARepeat: false, keyCode: 6)!
+        XCTAssertFalse(afterToolbarUndo!.overlayView(afterToolbarUndo!.overlay, shouldHandleKeyDownEvent: undoKey))
+        XCTAssertNotNil(content.editor.textSelection)
+        XCTAssertFalse(content.editor.textSelection === afterToolbarUndo)
         var result: CGImage?
         content.editor.onComplete = { result = $0 }
         buttons.first { $0.tag == 5 }!.performClick(nil)

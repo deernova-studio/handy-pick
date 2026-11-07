@@ -1,6 +1,7 @@
 import AppKit
 
-/// A white menu-bar badge with our simplified stacked-card mark cut out of its alpha.
+/// A template badge with our stacked-card mark cut out of its alpha.
+/// AppKit chooses the foreground for the menu bar's actual appearance/highlight.
 enum MenuBarIcon {
     static let size = NSSize(width: 22, height: 18)
 
@@ -14,7 +15,7 @@ enum MenuBarIcon {
             bitmap.size = size
             let context = NSGraphicsContext(bitmapImageRep: bitmap)!
             NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = context
-            NSColor.white.setFill()
+            NSColor.black.setFill()
             NSBezierPath(roundedRect: NSRect(x: 1, y: 1, width: 20, height: 16),
                          xRadius: 4, yRadius: 4).fill()
             context.cgContext.setBlendMode(.clear)
@@ -27,7 +28,7 @@ enum MenuBarIcon {
             NSGraphicsContext.restoreGraphicsState()
             image.addRepresentation(bitmap)
         }
-        image.isTemplate = false
+        image.isTemplate = true
         image.accessibilityDescription = "HandyPick"
         return image
     }

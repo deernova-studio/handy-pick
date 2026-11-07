@@ -16,7 +16,7 @@ final class ShortcutModeTests: XCTestCase {
     func testShiftZRecordsAndTriggersInEditorsWithoutQueryingFocus() throws {
         let binding = ShortcutBinding.key(6, 1 << 17)
         XCTAssertTrue(ShortcutMode.chord.accepts(binding))
-        XCTAssertTrue(binding.needsTypingProtection)
+        XCTAssertFalse(binding.needsTypingProtection)
         XCTAssertEqual(try JSONDecoder().decode(ShortcutBinding.self, from: JSONEncoder().encode(binding)), binding)
         var gate = KeyPressGate()
         var recognizer = ShortcutRecognizer(interval: 0.4)
@@ -33,7 +33,7 @@ final class ShortcutModeTests: XCTestCase {
         XCTAssertEqual(gate.up(code: 6), .consume)
     }
     func testDoublePressTypingProtectionStillApplies() {
-        for binding in [ShortcutBinding.key(35, 0), .key(6, 1 << 17)] {
+        for binding in [ShortcutBinding.key(35, 0), .key(6, 0)] {
             XCTAssertFalse(ShortcutMode.doublePress.allowsActivation(for: binding, focusAllowsShortcut: false))
             XCTAssertTrue(ShortcutMode.doublePress.allowsActivation(for: binding, focusAllowsShortcut: true))
         }
@@ -43,6 +43,23 @@ final class ShortcutModeTests: XCTestCase {
         func shouldNotQuery() -> Bool { XCTFail("Mouse must bypass typing protection"); return false }
         XCTAssertTrue(ShortcutMode.doublePress.allowsActivation(for: .mouse(2), focusAllowsShortcut: shouldNotQuery()))
         XCTAssertTrue(ShortcutMode.doublePress.allowsActivation(for: .mouse(3), focusAllowsShortcut: shouldNotQuery()))
+    }
+    func testShiftPBypassesFocusInBothModesAndHonorsTheirPressCounts() {
+        let binding = ShortcutBinding.key(35, 1 << 17)
+        for mode in ShortcutMode.allCases {
+            var gate = KeyPressGate()
+            var recognizer = ShortcutRecognizer(interval: 0.4)
+            var actions = 0
+            func unavailableFocus() -> Bool { XCTFail("Shift+P must not query an input field or AX availability"); return false }
+            for time in [1.0, 1.1] {
+                let allowed = mode.allowsActivation(for: binding, focusAllowsShortcut: unavailableFocus())
+                let result = gate.down(binding: binding, code: 35, flags: 1 << 17, repeating: false, allowShortcut: allowed)
+                XCTAssertEqual(result, .press)
+                if result == .press, recognizer.press(mode: mode, at: time, point: .zero, target: 42) != nil { actions += 1 }
+                XCTAssertEqual(gate.up(code: 35), .consume)
+            }
+            XCTAssertEqual(actions, mode == .chord ? 2 : 1)
+        }
     }
     func testSingleChordPressAndHoldOnlyDispatchOnceUntilRelease() {
         var gate = KeyPressGate()

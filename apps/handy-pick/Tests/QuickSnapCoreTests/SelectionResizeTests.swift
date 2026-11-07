@@ -3,6 +3,13 @@ import CoreGraphics
 @testable import QuickSnapCore
 
 final class SelectionResizeTests: XCTestCase {
+    func testMovingSelectionClampsBothAxesWithoutChangingSize() {
+        let bounds = CGRect(x: 0, y: 0, width: 720, height: 480)
+        let rect = CGRect(x: 80, y: 100, width: 300, height: 200)
+        XCTAssertEqual(SelectionGeometry.moved(rect, delta: CGPoint(x: 60, y: 30), in: bounds), CGRect(x: 140, y: 130, width: 300, height: 200))
+        XCTAssertEqual(SelectionGeometry.moved(rect, delta: CGPoint(x: -999, y: -999), in: bounds), CGRect(x: 0, y: 0, width: 300, height: 200))
+        XCTAssertEqual(SelectionGeometry.moved(rect, delta: CGPoint(x: 999, y: 999), in: bounds), CGRect(x: 420, y: 280, width: 300, height: 200))
+    }
     let bounds = CGRect(x: 0, y: 0, width: 720, height: 480)
     let rect = CGRect(x: 100, y: 80, width: 400, height: 300)
 

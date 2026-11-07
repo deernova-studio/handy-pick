@@ -5,9 +5,9 @@ final class TypingProtectionTests: XCTestCase {
     func testTypingKeysAreProtectedWhileIntentionalChordsAndFunctionKeysRemainAvailable() {
         for code: UInt16 in [0, 18, 49, 51, 36, 48, 123, 126] {
             XCTAssertTrue(ShortcutBinding.key(code, 0).needsTypingProtection)
-            XCTAssertTrue(ShortcutBinding.key(code, 1 << 17).needsTypingProtection)
+            XCTAssertFalse(ShortcutBinding.key(code, 1 << 17).needsTypingProtection)
         }
-        for modifier: UInt64 in [1 << 18, 1 << 19, 1 << 20] {
+        for modifier: UInt64 in [1 << 17, 1 << 18, 1 << 19, 1 << 20] {
             XCTAssertFalse(ShortcutBinding.key(0, modifier).needsTypingProtection)
         }
         XCTAssertFalse(ShortcutBinding.key(122, 0).needsTypingProtection)

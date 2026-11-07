@@ -42,6 +42,12 @@ public enum SelectionGeometry {
         return CGRect(x: left, y: top, width: right-left, height: bottom-top)
     }
 
+    public static func moved(_ rect: CGRect, delta: CGPoint, in bounds: CGRect) -> CGRect {
+        CGRect(x: max(bounds.minX, min(rect.minX+delta.x, bounds.maxX-rect.width)),
+               y: max(bounds.minY, min(rect.minY+delta.y, bounds.maxY-rect.height)),
+               width: rect.width, height: rect.height)
+    }
+
     public static func selection(from a: CGPoint, to b: CGPoint, in bounds: CGRect) -> CGRect {
         CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x-b.x), height: abs(a.y-b.y))
             .intersection(bounds)

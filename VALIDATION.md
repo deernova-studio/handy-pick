@@ -1,4 +1,62 @@
+## 2026-11-07 随取 / handypick 0.4.30 build 52
+
+- 整体审查自 0.4.23 以来的快捷键、终端路由、截图编辑、菜单栏外观与发布配置。修复历史图片选字时撤销导致选字状态丢失；工具栏撤销与 Command+Z 均恢复实况文本。
+- 截图移动增加 3 点起拖阈值：普通单击与微小抖动不再隐藏工具栏或移动选区。终端复制等待后重新检查 AX 目标期间，如果剪贴板已变化，取消后续粘贴，避免迟到的复制或其他写入被误粘贴。
+- One check 通过：67 项 Swift 测试、26 项 Python 测试和 arm64 Release 编译；回归覆盖撤销后恢复选字、单击及微小位移不隐藏工具栏，既有移动、双击确认、组合键与终端区域边界测试继续通过。
+- 真实 Codex 内嵌终端实体中键端到端、macOS 14 实机兼容性仍未完成验证。本次不将独立测试窗口或单元测试视为上述场景已修复的证据。
+- One release 完成 Developer ID 签名、应用及 DMG 的 Apple 公证与附票、Gatekeeper 验证。本机已安装启动 0.4.30 build 52，单实例且事件 tap 为 enabled；Downloads 中 DMG 与 SHA256SUMS 一致。
+
 # 验证记录
+
+## 2026-11-07 随取 / handypick 0.4.29 build 51
+
+- One release 签名、公证、附票及 Gatekeeper 检查通过；本机已安装启动 0.4.29，事件监听启用。DMG 已复制到 Downloads 并核对 SHA-256，尚未发布。
+- 截图框选完成默认无标注工具，内部拖动移动整个选区，八个手柄仍调整大小；标注工具显式选中后绘制，再次点击退出标注回到移动。历史图片继续默认实况文本。
+- 以起始矩形与拖动差量计算移动，保持尺寸、夹紧到当前屏幕边界；已有标注按实际偏移同步移动，拖动时隐藏工具栏，松开重排工具栏。中间双击确认保持。
+- One check：67 项 Swift、26 项 Python 测试及 arm64 Release 编译通过。新增双轴移动／越界夹紧、默认移动无误标注、标注随选区移动后像素对比、退出标注与工具栏跟随的回归；更新原来默认划线的测试以显式选工具。
+- 独立原生窗口使用实际 SelectionView 实测：300×200 选区向右 100、向下 40 点移动，工具栏跟随；随后双击确认返回 300×200 图片。
+
+## 2026-11-07 随取 / handypick 0.4.28 build 50
+
+- One release 签名、公证、附票及 Gatekeeper 验证通过；本机已安装启动 0.4.28，单实例事件监听启用。DMG 已放入 Downloads 并核对 SHA-256，尚未发布。
+- 用户反馈 Shift+P 仍常无法使用。发现双击模式下仅带 Shift 的绑定仍进入 TypingFocus，编辑焦点或未知／超时会放行打字并取消快捷操作；组合键模式已有直接绕过规则。
+- needsTypingProtection 改为只对无修饰键的普通键启用；所有明确绑定的 Shift/Command/Control/Option 组合在两种模式下均不查询输入框焦点。不修改用户的模式或已录入按键。
+- One check：65 项 Swift、26 项 Python 测试与 arm64 Release 编译通过。新增 Shift+P 经过按下、松开与触发识别器的回归：输入区查询不可用时仍不调用该查询，组合键模式每次触发、双击模式两次触发一次；普通键打字保护仍保留。
+- 当前 Mac 读取到的配置是双击中键、另存组合键为 Option+V，不能据此断言用户报告的 Shift+P 问题全部源于上述分支。用户随后确认是完全没反应；尚未确认故障机器和当时的触发模式。触发后的复制、粘贴、截图路由与终端真实验收保持独立。
+
+## 2026-11-07 随取 / handypick 0.4.27 build 49
+
+- One release 签名、公证、附票及 Gatekeeper 检查通过；本机已安装启动 0.4.27，单实例事件监听启用。签名 DMG 已放入 Downloads 并核对 SHA-256，尚未发布。
+- 菜单栏图标原先使用固定白色且 isTemplate=false，浅色背景易丢失对比。改为黑色 alpha 模板并启用 isTemplate，由 NSStatusButton/AppKit 处理实际菜单栏外观与高亮；22×18 画布、圆角底和内部镂空尺寸均保持。
+- One check：64 项 Swift、26 项 Python 测试及 arm64 Release 编译通过。此项为显示属性修正，未新增镜像实现的测试。
+- 独立原生窗口使用同一 MenuBarIcon，在 aqua/darkAqua 两种 NSButton 外观及白／深灰背景下检查，图标与镂空均可辨认。未更改用户全局外观设置；macOS 14 实机菜单栏效果尚未验证。
+
+## 2026-11-07 随取 / handypick 0.4.26 build 48
+
+- One release 签名、公证、附票和 Gatekeeper 验证通过；本机已安装启动 0.4.26，单实例事件监听启用。签名 DMG 已放入 Downloads 并校验 SHA-256，尚未发布。
+- 截图编辑阶段在选区内部双击左键，执行与勾号相同的确认回调；清除未提交的零长度标注，保留已完成的划线、画圈、文字。单击不确认，选区外与缩放手柄不确认，文字工具、OCR 和历史图片预览保留原交互。
+- One check：64 项 Swift、26 项 Python 测试及 arm64 Release 编译通过。新增完整双击序列与勾号输出像素一致性、只触发一次、边缘／外部／文字／OCR 不误确认的回归测试。
+- 独立原生窗口实测拖动框选后双击中间，完成回调返回 520×260 截图。复用了应用实际 SelectionView；不是模拟直接调用完成方法。
+- Codex 内嵌终端的真实中键验收仍待确认，不将本次截图交互验证视为终端问题已解决。
+
+## 2026-11-05 随取 / handypick 0.4.25 build 47（待真实 Codex 复测）
+
+- One release 签名、公证、附票及 Gatekeeper 检查通过；本机已安装启动 0.4.25，单实例且事件监听启用；DMG 已复制至 Downloads 并校验 SHA-256，尚未发布。
+- 用户实测 0.4.24 选字后仍截图。运行日志确认 terminal helper 与两层 terminal surface 已找到，但关系／坐标检查未通过；同一时段其他触发已走到粘贴。
+- 对画布文字的 hit-test 返回外层 AXGroup/AXWebArea/AXScrollArea，允许命中节点是终端 surface 的祖先；仍必须处于明确的 xterm 区域坐标内，保持前台、命中与焦点进程一致，拒绝不相关覆盖层、侧栏和聊天区。增加对应回归测试与固定结构计数日志。
+- 纠正 0.4.24 的复制快捷键错误：本机 Codex 代码中 Ctrl+Shift+C clipboard handler 受非 macOS 条件限制；macOS 应使用原生 Cmd+C copy 事件。已改为 Cmd+C，并避免再次聚焦已聚焦的终端输入控件。
+- One check：62 项 Swift、26 项 Python 测试及 arm64 Release 编译通过。测试后仅补充无内容的诊断计数；最终 Release 构建再次编译验证。
+- 移除独立 Electron/xterm fixture 中人为添加的 Ctrl+Shift+C 处理器，以原生 macOS 行为实测：选中自建测试行后 Cmd+C 得到该测试行；无选区 Cmd+C 不改变剪贴板 changeCount；Cmd+V 收到相同文本字节，未发送回车或连接 shell。真实 Codex 中键路径尚待用户验证。
+
+## 2026-11-05 随取 / handypick 0.4.24 build 46（实测失败，见 0.4.25 修正）
+
+- One release 签名、公证、附票和 Gatekeeper 检查通过，本机已安装启动 0.4.24，确认单实例与一条启用的事件监听；DMG 已复制到 Downloads，SHA-256 校验通过。尚未发布 GitHub。
+- 用户明确出问题的是 Codex 内嵌终端；0.4.22 的 com.apple.Terminal 规则未覆盖此场景。
+- 新增 Codex xterm 路径：要求聚焦 xterm-helper-textarea、启用且非安全输入，鼠标命中与焦点共享明确的 xterm/xterm-screen 祖先，坐标在该区域内且前台进程一致。不会用整个 Codex 窗口或 Web 文档代替终端范围。
+- xterm 的 helper 可能保留上次粘贴的值，因此先走终端自身选区处理，避免把 helper 的 AXSelectedText 当作真实选区。仅针对该终端发送其 Ctrl+Shift+C 复制选区快捷键；观察剪贴板变化，无变化时重新确认同一个焦点及终端区域后粘贴。不会发送 Ctrl+C，也不读取终端全文。
+- One check：61 项 Swift、26 项 Python 测试与 arm64 Release 编译通过。覆盖精确 xterm 标记、拒绝普通控件／近似类名／安全或禁用输入；既有前台与坐标边界测试保持通过。
+- 独立 Electron 40 + xterm 5.5 测试窗口复现 Codex 的复制选区快捷键语义，实际拖选自建测试行后复制、清除选区后粘贴成功，未发送回车，也未连接 shell。此测试验证复制流程，不等同于真实 Codex 的 AX 祖先匹配与实体中键端到端验收。
+- 当前桌面工具禁止直接操作 Codex，真实内嵌终端需用户复测。诊断只记录固定结构状态和计数，不记录终端内容、选区、标题或剪贴板值。
 
 ## 2026-11-05 随取 / handypick 0.4.23 build 45
 

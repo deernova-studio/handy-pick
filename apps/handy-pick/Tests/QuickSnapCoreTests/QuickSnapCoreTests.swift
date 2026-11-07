@@ -3,6 +3,38 @@ import CoreGraphics
 @testable import QuickSnapCore
 
 final class QuickSnapCoreTests: XCTestCase {
+    func testEmbeddedTerminalContainerHitKeepsTerminalBoundsAndRejectsOverlays() {
+        let rect = CGRect(x: 100, y: 200, width: 600, height: 300)
+        func allowed(inside: Bool = false, ancestor: Bool = true, point: CGPoint = CGPoint(x: 200, y: 250),
+                     hit: Int32 = 10, focus: Int32 = 10, foreground: Int32 = 10) -> Bool {
+            InputPolicy.canUseEmbeddedTerminalSurface(hitInsideSurface: inside, hitIsAncestorContainer: ancestor,
+                point: point, bounds: rect, hitPID: hit, focusedPID: focus, foregroundPID: foreground)
+        }
+        XCTAssertTrue(allowed()) // AX hit returns an enclosing group or WebArea.
+        XCTAssertTrue(allowed(inside: true, ancestor: false))
+        XCTAssertFalse(allowed(inside: false, ancestor: false)) // Unrelated overlay/sibling.
+        XCTAssertFalse(allowed(point: CGPoint(x: 200, y: 150))) // Chat above terminal.
+        XCTAssertFalse(allowed(point: CGPoint(x: 50, y: 250))) // Sidebar.
+        XCTAssertFalse(allowed(hit: 11)); XCTAssertFalse(allowed(focus: 11)); XCTAssertFalse(allowed(foreground: 11))
+    }
+    func testEmbeddedTerminalRequiresExactHelperAndSurfaceMarkers() {
+        for role in ["AXTextArea", "AXTextField"] {
+            XCTAssertTrue(InputPolicy.isEmbeddedTerminalInput(role: role, classes: ["xterm-helper-textarea"], secure: false, enabled: nil))
+        }
+        for role in ["AXGroup", "AXWebArea", "AXStaticText"] {
+            XCTAssertFalse(InputPolicy.isEmbeddedTerminalInput(role: role, classes: ["xterm-helper-textarea"], secure: false, enabled: true))
+        }
+        for classes in [[], ["terminal"], ["not-xterm-helper-textarea"]] {
+            XCTAssertFalse(InputPolicy.isEmbeddedTerminalInput(role: "AXTextArea", classes: classes, secure: false, enabled: true))
+        }
+        XCTAssertFalse(InputPolicy.isEmbeddedTerminalInput(role: "AXTextArea", classes: ["xterm-helper-textarea"], secure: true, enabled: true))
+        XCTAssertFalse(InputPolicy.isEmbeddedTerminalInput(role: "AXTextArea", classes: ["xterm-helper-textarea"], secure: false, enabled: false))
+        XCTAssertTrue(InputPolicy.isEmbeddedTerminalSurface(classes: ["xterm", "focus"]))
+        XCTAssertTrue(InputPolicy.isEmbeddedTerminalSurface(classes: ["xterm-screen"]))
+        for classes in [[], ["terminal"], ["xterm-helper-textarea"], ["xterm-container"], ["chat-input"]] {
+            XCTAssertFalse(InputPolicy.isEmbeddedTerminalSurface(classes: classes))
+        }
+    }
     func testTerminalPasteRequiresFocusedSurfaceUnderPointerInForeground() {
         let bounds = CGRect(x: 100, y: 100, width: 600, height: 400)
         func allowed(bundle: String? = "com.apple.Terminal", role: String = "AXTextArea",

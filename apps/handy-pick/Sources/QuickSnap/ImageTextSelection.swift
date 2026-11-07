@@ -11,6 +11,7 @@ import VisionKit
     private(set) var recognitionFinished = false
     private(set) var recognizedText = ""
     var onConfirm: (() -> Void)?
+    var onUndo: (() -> Void)?
     private let quiet: Bool
     var onCancel: (() -> Void)?
 
@@ -75,6 +76,9 @@ import VisionKit
         }
         if event.modifierFlags.contains(.command), event.keyCode == 8 {
             copyText(allIfUnselected: false); return false
+        }
+        if event.modifierFlags.contains(.command), event.keyCode == 6, let onUndo {
+            onUndo(); return false
         }
         return true
     }

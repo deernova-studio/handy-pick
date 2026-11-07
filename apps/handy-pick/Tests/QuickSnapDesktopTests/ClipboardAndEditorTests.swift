@@ -4,6 +4,105 @@ import QuickSnapCore
 @testable import QuickSnap
 
 final class ClipboardAndEditorTests: XCTestCase {
+    @MainActor func testCropMovesByDefaultAndCarriesAnnotationsAfterToolIsToggledOff() {
+        _ = NSApplication.shared
+        let panel = SelectionPanel(contentRect: NSRect(x: 0, y: 0, width: 720, height: 480), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false; defer { panel.close() }
+        let image = fixture(), view = SelectionView(image: fixture()); panel.contentView = view
+        func event(_ type: NSEvent.EventType, _ x: CGFloat, _ y: CGFloat) -> NSEvent {
+            let p = view.convert(CGPoint(x: x, y: y), to: nil)
+            return mouse(type, x: p.x, y: p.y)
+        }
+        func drag(_ x: CGFloat, _ y: CGFloat, _ endX: CGFloat, _ endY: CGFloat) {
+            view.mouseDown(with: event(.leftMouseDown, x, y))
+            view.mouseDragged(with: event(.leftMouseDragged, endX, endY))
+            view.mouseUp(with: event(.leftMouseUp, endX, endY))
+        }
+        var result: CGImage?; view.onComplete = { result = $0 }
+        drag(80, 100, 380, 300)
+        let bar = view.subviews.compactMap { $0 as? PaperlightGlass }.first!
+        let buttons = bar.content.subviews.compactMap { $0 as? NSButton }
+        let line = buttons.first { $0.tag == 0 }!, confirm = buttons.first { $0.tag == 5 }!
+        XCTAssertEqual(line.state, .off)
+        let oldFrame = bar.frame
+        view.mouseDown(with: event(.leftMouseDown, 200, 220))
+        XCTAssertFalse(bar.isHidden, "A click must not flash the toolbar")
+        view.mouseDragged(with: event(.leftMouseDragged, 201, 221))
+        view.mouseUp(with: event(.leftMouseUp, 201, 221))
+        XCTAssertEqual(bar.frame, oldFrame, "Tiny click jitter must not move the crop")
+        drag(200, 220, 230, 240)
+        XCTAssertNil(result); XCTAssertFalse(bar.isHidden); XCTAssertNotEqual(bar.frame, oldFrame)
+        confirm.performClick(nil)
+        let moved = AnnotationRenderer.render(image: image, selection: CGRect(x: 110, y: 120, width: 300, height: 200), logicalSize: view.bounds.size, annotations: [])!
+        XCTAssertEqual(result!.dataProvider!.data! as Data, moved.dataProvider!.data! as Data)
+        drag(230, 240, 200, 220)
+        line.performClick(nil); drag(150, 150, 250, 180)
+        line.performClick(nil); XCTAssertEqual(line.state, .off)
+        drag(200, 220, 260, 250)
+        confirm.performClick(nil)
+        let expected = AnnotationRenderer.render(image: image, selection: CGRect(x: 140, y: 130, width: 300, height: 200), logicalSize: view.bounds.size,
+            annotations: [Annotation(kind: .line, start: CGPoint(x: 210, y: 180), end: CGPoint(x: 310, y: 210))])!
+        XCTAssertEqual(result!.dataProvider!.data! as Data, expected.dataProvider!.data! as Data)
+    }
+    @MainActor func testDoubleClickInsideCropConfirmsSameImageAsCheckmark() {
+        _ = NSApplication.shared
+        let panel = SelectionPanel(contentRect: NSRect(x: 0, y: 0, width: 720, height: 480), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false; defer { panel.close() }
+        let view = SelectionView(image: fixture()); panel.contentView = view
+        func event(_ type: NSEvent.EventType, _ x: CGFloat, _ y: CGFloat, clicks: Int = 1) -> NSEvent {
+            let p = view.convert(CGPoint(x: x, y: y), to: nil)
+            return mouse(type, x: p.x, y: p.y, clicks: clicks)
+        }
+        var results: [CGImage] = []
+        view.onComplete = { if let image = $0 { results.append(image) } }
+        view.mouseDown(with: event(.leftMouseDown, 80, 100))
+        view.mouseUp(with: event(.leftMouseUp, 600, 360))
+        let initialBar = view.subviews.compactMap { $0 as? PaperlightGlass }.first!
+        initialBar.content.subviews.compactMap { $0 as? NSButton }.first { $0.tag == 0 }!.performClick(nil)
+        view.mouseDown(with: event(.leftMouseDown, 150, 200))
+        view.mouseDragged(with: event(.leftMouseDragged, 400, 200))
+        view.mouseUp(with: event(.leftMouseUp, 400, 200))
+        let bar = view.subviews.compactMap { $0 as? PaperlightGlass }.first!
+        let buttons = bar.content.subviews.compactMap { $0 as? NSButton }
+        buttons.first { $0.tag == 5 }!.performClick(nil)
+        let expected = results.removeFirst().dataProvider!.data! as Data
+        view.mouseDown(with: event(.leftMouseDown, 300, 260))
+        view.mouseUp(with: event(.leftMouseUp, 300, 260))
+        XCTAssertTrue(results.isEmpty, "A single click must not confirm")
+        view.mouseDown(with: event(.leftMouseDown, 300, 260, clicks: 2))
+        view.mouseUp(with: event(.leftMouseUp, 300, 260, clicks: 2))
+        XCTAssertEqual(results.count, 1)
+        XCTAssertEqual(results.first?.width, 520); XCTAssertEqual(results.first?.height, 260)
+        XCTAssertEqual(results.first!.dataProvider!.data! as Data, expected)
+    }
+
+    @MainActor func testDoubleClickOutsideOnHandlesOrInTextModesDoesNotConfirm() {
+        _ = NSApplication.shared
+        let panel = SelectionPanel(contentRect: NSRect(x: 0, y: 0, width: 720, height: 480), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false; defer { panel.close() }
+        let view = SelectionView(image: fixture()); panel.contentView = view
+        func event(_ type: NSEvent.EventType, _ x: CGFloat, _ y: CGFloat, clicks: Int = 1) -> NSEvent {
+            let p = view.convert(CGPoint(x: x, y: y), to: nil)
+            return mouse(type, x: p.x, y: p.y, clicks: clicks)
+        }
+        var completed = false; view.onComplete = { _ in completed = true }
+        view.mouseDown(with: event(.leftMouseDown, 80, 100))
+        view.mouseUp(with: event(.leftMouseUp, 600, 360))
+        for point in [CGPoint(x: 20, y: 20), CGPoint(x: 600, y: 230)] {
+            view.mouseDown(with: event(.leftMouseDown, point.x, point.y, clicks: 2))
+            view.mouseUp(with: event(.leftMouseUp, point.x, point.y, clicks: 2))
+            XCTAssertFalse(completed)
+        }
+        let bar = view.subviews.compactMap { $0 as? PaperlightGlass }.first!
+        let buttons = bar.content.subviews.compactMap { $0 as? NSButton }
+        buttons.first { $0.tag == 2 }!.performClick(nil)
+        view.mouseDown(with: event(.leftMouseDown, 300, 240, clicks: 2))
+        XCTAssertFalse(completed)
+        XCTAssertNotNil(view.subviews.compactMap { $0 as? NSTextField }.first)
+        buttons.first { $0.tag == 6 }!.performClick(nil)
+        view.mouseDown(with: event(.leftMouseDown, 300, 240, clicks: 2))
+        XCTAssertFalse(completed); XCTAssertNotNil(view.textSelection)
+    }
     @MainActor func testSessionBaselineSelectionClearAndPrivacyMarker() {
         let pb = NSPasteboard.withUniqueName()
         defer { pb.releaseGlobally() }
@@ -53,6 +152,7 @@ final class ClipboardAndEditorTests: XCTestCase {
         XCTAssertEqual(buttons.count, 7)
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(bar.content.frame.size, bar.bounds.size)
+        buttons.first { $0.tag == 0 }!.performClick(nil)
         view.mouseDown(with: mouse(.leftMouseDown, x: 150, y: 250))
         view.mouseDragged(with: mouse(.leftMouseDragged, x: 400, y: 250))
         view.mouseUp(with: mouse(.leftMouseUp, x: 400, y: 250))
@@ -92,6 +192,7 @@ final class ClipboardAndEditorTests: XCTestCase {
         let buttons = bar.content.subviews.compactMap { $0 as? NSButton }.sorted { $0.tag < $1.tag }
         var result: CGImage?
         view.onComplete = { result = $0 }
+        buttons[0].performClick(nil)
         drag(150, 200, 400, 200)
         buttons[5].performClick(nil)
         let annotated = result!.dataProvider!.data! as Data
@@ -312,8 +413,8 @@ final class ClipboardAndEditorTests: XCTestCase {
         c.setFillColor(NSColor.systemTeal.cgColor); c.fillEllipse(in: CGRect(x: 160, y: 220, width: 80, height: 80))
         return c.makeImage()!
     }
-    private func mouse(_ type: NSEvent.EventType, x: CGFloat, y: CGFloat) -> NSEvent {
-        NSEvent.mouseEvent(with: type, location: CGPoint(x: x, y: y), modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+    private func mouse(_ type: NSEvent.EventType, x: CGFloat, y: CGFloat, clicks: Int = 1) -> NSEvent {
+        NSEvent.mouseEvent(with: type, location: CGPoint(x: x, y: y), modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: clicks, pressure: 1)!
     }
     @MainActor private func savePreview(_ view: NSView, _ name: String) {
         guard let path = ProcessInfo.processInfo.environment["HANDYPICK_PREVIEW_DIR"] else { return }

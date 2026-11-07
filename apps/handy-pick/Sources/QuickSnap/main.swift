@@ -227,7 +227,7 @@ import OSLog
             case .paste(let target): input = target
             }
             defer { self.preparing = false }
-            guard !(NSPasteboard.general.types?.isEmpty ?? true) else {
+            guard input.copyTerminalSelectionFirst || !(NSPasteboard.general.types?.isEmpty ?? true) else {
                 self.recordGestureOutcome("input-found-empty-clipboard")
                 self.inform("剪贴板为空"); NSSound.beep(); return
             }
@@ -237,11 +237,45 @@ import OSLog
             for _ in 0..<10 {
                 try? await Task.sleep(for: .milliseconds(60))
                 guard self.trigger.running, !self.capture.active else { return }
-                if input.isFocused() { self.paste(to: input.pid); return }
+                if input.isFocused() {
+                    if input.copyTerminalSelectionFirst {
+                        await self.copyOrPasteTerminal(input, at: gesture.point)
+                    } else { self.paste(to: input.pid) }
+                    return
+                }
             }
             self.recordGestureOutcome("input-found-focus-unconfirmed")
             self.inform("请先点入输入框再使用快捷键")
         }
+    }
+
+    private func copyOrPasteTerminal(_ input: InputTarget, at point: CGPoint) async {
+        guard input.isFocused() else { return }
+        let changeCount = NSPasteboard.general.changeCount
+        // macOS uses the native copy event; Codex's Ctrl-Shift-C clipboard
+        // handler is enabled only on non-macOS platforms. Never send Ctrl-C.
+        postShortcut(key: 8, flags: .maskCommand)
+        for _ in 0..<12 {
+            try? await Task.sleep(for: .milliseconds(50))
+            guard trigger.running, !capture.active, input.isFocused() else { return }
+            if NSPasteboard.general.changeCount != changeCount {
+                clipboard.poll()
+                recordGestureOutcome("terminal-selection-copied")
+                inform("已复制选中文字"); copyFeedback.show()
+                return
+            }
+        }
+        // Recheck the same terminal surface before the fallback paste, so a
+        // focus change or panel closing during the async copy cannot redirect it.
+        guard let current = InputTarget.at(point), current.copyTerminalSelectionFirst,
+              current.pid == input.pid, CFEqual(current.element, input.element), input.isFocused() else { return }
+        // Clipboard writers can run while the synchronous AX recheck is waiting.
+        // Do not paste if the copy completed (or another writer intervened) then.
+        guard NSPasteboard.general.changeCount == changeCount else { return }
+        guard !(NSPasteboard.general.types?.isEmpty ?? true) else {
+            recordGestureOutcome("input-found-empty-clipboard"); inform("剪贴板为空"); return
+        }
+        paste(to: input.pid)
     }
 
     @objc private func copyRecent() {
@@ -256,15 +290,18 @@ import OSLog
     private func paste(to pid: Int32) {
         guard AXIsProcessTrusted(), pid > 0,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
+        postShortcut(key: 9, flags: .maskCommand)
+        recordGestureOutcome("paste-shortcut-posted")
+        inform("已发送粘贴")
+    }
+    private func postShortcut(key: CGKeyCode, flags: CGEventFlags) {
         let source = CGEventSource(stateID: .combinedSessionState)
-        let down = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true)
-        let up = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false)
-        down?.flags = .maskCommand; up?.flags = .maskCommand
+        let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true)
+        let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false)
+        down?.flags = flags; up?.flags = flags
         down?.setIntegerValueField(.eventSourceUserData, value: ShortcutTrigger.syntheticEventTag)
         up?.setIntegerValueField(.eventSourceUserData, value: ShortcutTrigger.syntheticEventTag)
         down?.post(tap: .cghidEventTap); up?.post(tap: .cghidEventTap)
-        recordGestureOutcome("paste-shortcut-posted")
-        inform("已发送粘贴")
     }
 
     @objc private func requestPermission() {

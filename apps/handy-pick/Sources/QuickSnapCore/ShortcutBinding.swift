@@ -16,13 +16,12 @@ public enum ShortcutBinding: Codable, Equatable {
         }
     }
 
-    /// Plain keys (including Shift-only bindings) can type or edit text.
-    /// Function keys and deliberate Command/Control/Option chords remain shortcuts.
+    /// Only unmodified typing keys need focus protection. Every explicitly
+    /// configured modifier chord, including Shift-only, remains a shortcut.
     public var needsTypingProtection: Bool {
         guard case .key(let code, let flags) = self else { return false }
-        let commandControlOption: UInt64 = (1 << 18) | (1 << 19) | (1 << 20)
         let functionKeys: Set<UInt16> = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111, 105, 107, 113, 106, 64, 79, 80, 90]
-        return flags & commandControlOption == 0 && !functionKeys.contains(code)
+        return flags & Self.modifierMask == 0 && !functionKeys.contains(code)
     }
 
     public static func isModifier(_ code: UInt16) -> Bool {
