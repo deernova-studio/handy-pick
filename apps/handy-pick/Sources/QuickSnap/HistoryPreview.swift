@@ -6,6 +6,7 @@ final class HistoryPreview: NSObject, NSWindowDelegate {
     private(set) var entryID: UUID?
     private(set) var window: NSPanel?
     var onDismiss: (() -> Void)?
+    var onFocusChange: (() -> Void)?
     var onEditedImage: ((CGImage) -> Void)?
 
     func show(_ entry: ClipboardHistory.Entry) {
@@ -26,6 +27,7 @@ final class HistoryPreview: NSObject, NSWindowDelegate {
         panel.delegate = self
         panel.contentView = Self.contentView(for: entry.content, size: size)
         if let content = panel.contentView as? HistoryImageEditor {
+            panel.minSize.width = max(panel.minSize.width, content.editor.toolbarContentWidth + 32)
             content.editor.onComplete = { [weak self] image in
                 guard let self else { return }
                 self.dismiss()
@@ -84,6 +86,9 @@ final class HistoryPreview: NSObject, NSWindowDelegate {
         guard let panel = window else { return }
         panel.close()
     }
+
+    func windowDidBecomeKey(_ notification: Notification) { onFocusChange?() }
+    func windowDidResignKey(_ notification: Notification) { onFocusChange?() }
 
     func windowWillClose(_ notification: Notification) {
         window?.contentView = nil

@@ -3,6 +3,7 @@ import ImageIO
 import QuickSnapCore
 
 final class ShortcutPopover: NSViewController {
+    var onRecordPaste: (() -> Void)?
     var onRecord: (() -> Void)?
     var onPermission: (() -> Void)?
     var onSelect: ((UUID) -> Void)?
@@ -17,6 +18,11 @@ final class ShortcutPopover: NSViewController {
     private var selectedType = 0
     private let scroll = NSScrollView()
     private let separator = PaperlightSurface()
+    private var chordMode = false
+    private var recordingPaste = false
+    private let copyLabel = NSTextField(labelWithString: "复制 / 截图")
+    private let pasteLabel = NSTextField(labelWithString: "粘贴")
+    private let pasteButton = NSButton(title: "", target: nil, action: nil)
     private let bindingButton = NSButton(title: "", target: nil, action: nil)
     private let modeButton = NSPopUpButton(frame: .zero, pullsDown: true)
     private let grid = FlippedHistoryView()
@@ -42,6 +48,12 @@ final class ShortcutPopover: NSViewController {
         bindingButton.setAccessibilityLabel("录入快捷键")
         bindingButton.toolTip = "点击后按新键，Esc 取消"
         root.addSubview(bindingButton)
+        pasteButton.bezelStyle = .rounded; pasteButton.controlSize = .regular
+        pasteButton.font = Paperlight.label; pasteButton.target = self; pasteButton.action = #selector(recordPaste)
+        pasteButton.setAccessibilityLabel("录入粘贴快捷键")
+        pasteButton.toolTip = "直接粘贴到当前焦点；允许与复制快捷键相同"
+        for label in [copyLabel, pasteLabel] { label.font = Paperlight.body; label.textColor = Paperlight.secondary; root.addSubview(label) }
+        root.addSubview(pasteButton)
         separator.frame = NSRect(x: 16, y: 55, width: 328, height: Paperlight.hairline(root))
         separator.fill = Paperlight.line; root.addSubview(separator)
         scroll.frame = NSRect(x: 16, y: 64, width: 328, height: 312)
@@ -57,10 +69,9 @@ final class ShortcutPopover: NSViewController {
         typeFilter.target = self; typeFilter.action = #selector(selectHistoryType(_:))
         typeFilter.setAccessibilityLabel("剪贴板类型")
         for (index, item) in [("square.grid.2x2", "全部"), ("photo", "图片"), ("text.alignleft", "文字")].enumerated() {
-            let image = NSImage(systemSymbolName: item.0, accessibilityDescription: item.1)!
-                .withSymbolConfiguration(.init(pointSize: 13, weight: .medium))!
+            let image = Self.filterIcon(item.0, description: item.1)
             typeFilter.setImage(image, forSegment: index)
-            typeFilter.setImageScaling(.scaleProportionallyDown, forSegment: index)
+            typeFilter.setImageScaling(.scaleNone, forSegment: index)
             typeFilter.setWidth(28, forSegment: index)
             typeFilter.setToolTip(item.1, forSegment: index)
         }
@@ -72,13 +83,43 @@ final class ShortcutPopover: NSViewController {
         updateHistory([])
     }
 
-    func update(binding: String, recording: Bool, needsPermission: Bool, mode: ShortcutMode = .doublePress) {
+    /// Freeze the symbol's geometry: the native segment still supplies its
+    /// selected background/tint, but cannot substitute a larger/heavier symbol.
+    private static func filterIcon(_ name: String, description: String) -> NSImage {
+        let symbol = NSImage(systemSymbolName: name, accessibilityDescription: description)!
+            .withSymbolConfiguration(.init(pointSize: 13, weight: .regular))!
+        let size = NSSize(width: 16, height: 16)
+        let image = NSImage(size: size)
+        let ratio = min(1, 14 / max(symbol.size.width, symbol.size.height))
+        let glyph = NSSize(width: symbol.size.width * ratio, height: symbol.size.height * ratio)
+        for scale in [1, 2, 3] {
+            let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil,
+                pixelsWide: 16 * scale, pixelsHigh: 16 * scale,
+                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            let context = NSGraphicsContext(bitmapImageRep: bitmap)!
+            NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = context
+            context.cgContext.scaleBy(x: CGFloat(scale), y: CGFloat(scale))
+            symbol.draw(in: NSRect(x: (16-glyph.width)/2, y: (16-glyph.height)/2,
+                                  width: glyph.width, height: glyph.height))
+            NSGraphicsContext.restoreGraphicsState()
+            bitmap.size = size; image.addRepresentation(bitmap)
+        }
+        image.isTemplate = true; image.accessibilityDescription = description
+        return image
+    }
+
+    func update(binding: String, recording: Bool, needsPermission: Bool, mode: ShortcutMode = .doublePress, pasteBinding: String = "", recordingPaste: Bool = false) {
         loadViewIfNeeded(); self.needsPermission = needsPermission
+        let modeChanged = chordMode != (mode == .chord)
+        chordMode = mode == .chord; self.recordingPaste = recordingPaste
         modeButton.item(at: 0)?.title = mode == .doublePress ? "双击" : "组合键"
         modeButton.selectItem(at: mode == .doublePress ? 1 : 2)
         modeButton.item(at: 1)?.state = mode == .doublePress ? .on : .off
         modeButton.item(at: 2)?.state = mode == .chord ? .on : .off
-        bindingButton.title = needsPermission ? "授权…" : (recording ? (mode == .chord ? "请按组合键…" : "请按新键…") : binding)
+        bindingButton.title = needsPermission ? "授权…" : (recording && !recordingPaste ? (mode == .chord ? "请按组合键…" : "请按新键…") : binding)
+        pasteButton.title = needsPermission ? "授权…" : (recording && recordingPaste ? "请按组合键…" : pasteBinding)
+        if modeChanged { renderHistory() }
         bindingButton.toolTip = mode == .chord ? "按住 ⌘、⌃、⌥ 或 ⇧ 再按一个键；一次触发，输入框内也生效；Esc 取消" : "点击后按新键，双击触发；Esc 取消"
     }
     func updateHistory(_ entries: [ClipboardHistory.Entry]) {
@@ -108,7 +149,8 @@ final class ShortcutPopover: NSViewController {
         let contentHeight = max(0, CGFloat(rows) * 120 - 8)
         let visibleHeight = max(0, CGFloat(min(rows, 3)) * 120 - 8)
         let previousOrigin = scroll.contentView.bounds.origin
-        scroll.frame = NSRect(x: 16, y: 64, width: 328, height: visibleHeight)
+        let top: CGFloat = chordMode ? 136 : 64
+        scroll.frame = NSRect(x: 16, y: top, width: 328, height: visibleHeight)
         grid.frame = NSRect(x: 0, y: 0, width: 328, height: contentHeight)
         scroll.hasVerticalScroller = rows > 3
         scroll.contentView.scroll(to: NSPoint(x: 0, y: min(max(0, previousOrigin.y), max(0, contentHeight-visibleHeight))))
@@ -117,11 +159,16 @@ final class ShortcutPopover: NSViewController {
         separator.isHidden = entries.isEmpty
         typeFilter.isHidden = history.isEmpty
         filterDivider.isHidden = history.isEmpty
-        let size = NSSize(width: entries.isEmpty ? 240 : 360, height: entries.isEmpty ? 56 : 64 + visibleHeight + 16)
+        let size = NSSize(width: chordMode || !entries.isEmpty ? 360 : 240, height: entries.isEmpty ? (chordMode ? 128 : 56) : top + visibleHeight + 16)
+        separator.frame.origin.y = top - 9
+        copyLabel.isHidden = !chordMode; pasteLabel.isHidden = !chordMode; pasteButton.isHidden = !chordMode
+        copyLabel.frame = NSRect(x: 16, y: 57, width: 116, height: 24)
+        pasteLabel.frame = NSRect(x: 16, y: 93, width: 116, height: 24)
+        pasteButton.frame = pasteButton.frame(forAlignmentRect: NSRect(x: 144, y: 92, width: 200, height: 24))
         // AppKit bezel/shadow insets differ by control type and OS version.
         // Align visible control rectangles instead of assigning equal outer frames.
         modeButton.frame = modeButton.frame(forAlignmentRect: NSRect(x: 16, y: 16, width: 80, height: 24))
-        bindingButton.frame = bindingButton.frame(forAlignmentRect: NSRect(x: 104, y: 16, width: 120, height: 24))
+        bindingButton.frame = bindingButton.frame(forAlignmentRect: NSRect(x: chordMode ? 144 : 104, y: chordMode ? 56 : 16, width: chordMode ? 200 : 120, height: 24))
         typeFilter.frame = typeFilter.frame(forAlignmentRect: NSRect(x: 240, y: 16, width: 104, height: 24))
         if preferredContentSize != size {
             preferredContentSize = size
@@ -139,7 +186,8 @@ final class ShortcutPopover: NSViewController {
             grid.addSubview(tile)
         }
     }
-    func showRecordingHint(_ text: String) { bindingButton.title = text }
+    func showRecordingHint(_ text: String) { (recordingPaste ? pasteButton : bindingButton).title = text }
+    @objc private func recordPaste() { if needsPermission { onPermission?() } else { onRecordPaste?() } }
     @objc private func clearHistory() { onClear?() }
     @objc private func record() { if needsPermission { onPermission?() } else { onRecord?() } }
     @objc private func selectTriggerMode() { onModeChange?(modeButton.indexOfSelectedItem == 2 ? .chord : .doublePress) }

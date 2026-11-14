@@ -1,11 +1,19 @@
 import AppKit
 import VisionKit
+import OSLog
 
 /// On-device Live Text over the exact crop displayed to the user.
 @MainActor final class ImageTextSelection: NSImageView, ImageAnalysisOverlayViewDelegate {
     let overlay = ImageAnalysisOverlayView(frame: .zero)
     private let status = NSTextField(labelWithString: "正在识别文字…")
-    private let analyzer = ImageAnalyzer()
+    private static let analyzer = ImageAnalyzer()
+    private let progress = NSProgressIndicator()
+    private let statusSurface = PaperlightSurface()
+    private let retry = NSButton(title: "重试", target: nil, action: nil)
+    private var loadingTask: Task<Void, Never>?
+    private var loadingShownAt: TimeInterval?
+    private var sourceImage: CGImage?
+    var onAnalysis: ((ImageAnalysis) -> Void)?
     private var work: Task<Void, Never>?
     private let feedback = CopyFeedback()
     private(set) var recognitionFinished = false
@@ -15,7 +23,7 @@ import VisionKit
     private let quiet: Bool
     var onCancel: (() -> Void)?
 
-    init(image: CGImage, frame: NSRect, quiet: Bool = false) {
+    init(image: CGImage, frame: NSRect, quiet: Bool = false, cached: ImageAnalysis? = nil) {
         self.quiet = quiet
         super.init(frame: frame)
         self.image = NSImage(cgImage: image, size: frame.size)
@@ -25,41 +33,78 @@ import VisionKit
         overlay.preferredInteractionTypes = .textSelection
         overlay.isSupplementaryInterfaceHidden = true
         addSubview(overlay)
-        status.font = Paperlight.label; status.textColor = Paperlight.ink
-        status.backgroundColor = Paperlight.raised; status.drawsBackground = true
-        status.alignment = .center
+        sourceImage = image
+        status.font = Paperlight.caption; status.textColor = Paperlight.secondary
         status.setAccessibilityLabel("文字识别状态")
-        status.isHidden = quiet
-        addSubview(status)
+        statusSurface.fill = Paperlight.raised; statusSurface.radius = 8
+        statusSurface.isHidden = true; addSubview(statusSurface)
+        progress.style = .spinning; progress.controlSize = .small
+        statusSurface.addSubview(progress); statusSurface.addSubview(status)
+        retry.bezelStyle = .rounded; retry.controlSize = .small
+        retry.target = self; retry.action = #selector(retryRecognition)
+        retry.isHidden = true; statusSurface.addSubview(retry)
+        if let cached { apply(cached) } else { recognize() }
+    }
+    private func apply(_ analysis: ImageAnalysis) {
+        recognitionFinished = true; recognizedText = analysis.transcript
+        overlay.analysis = analysis; overlay.selectableItemsHighlighted = false
+        onAnalysis?(analysis)
+        loadingTask?.cancel(); progress.stopAnimation(nil); progress.isHidden = true
+        let hideStatus = analysis.hasResults(for: .text) || quiet
+        if hideStatus, let shown = loadingShownAt, ProcessInfo.processInfo.systemUptime-shown < 0.5 {
+            loadingTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(max(0, 0.5-(ProcessInfo.processInfo.systemUptime-shown))))
+                guard !Task.isCancelled else { return }; self?.statusSurface.isHidden = true
+            }
+        } else { statusSurface.isHidden = hideStatus }
+        status.stringValue = analysis.hasResults(for: .text) ? "可拖选文字" : "未识别到文字"; needsLayout = true
+    }
+    @objc private func retryRecognition() { recognize() }
+    private func recognize() {
+        guard let image = sourceImage else { return }
+        work?.cancel(); loadingTask?.cancel()
+        recognitionFinished = false; loadingShownAt = nil; retry.isHidden = true; statusSurface.isHidden = true
         guard ImageAnalyzer.isSupported else {
-            status.stringValue = "此设备不支持文字识别"; recognitionFinished = true; return
+            status.stringValue = "此设备不支持文字识别"; recognitionFinished = true
+            statusSurface.isHidden = false; return
         }
-        work = Task { [weak self, analyzer] in
+        loadingTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled, let self, !self.recognitionFinished else { return }
+            self.loadingShownAt = ProcessInfo.processInfo.systemUptime
+            self.status.stringValue = "识别文字…"; self.statusSurface.isHidden = false
+            self.progress.isHidden = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            if !self.progress.isHidden { self.progress.startAnimation(nil) }
+            self.needsLayout = true
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled, !self.recognitionFinished else { return }
+            self.status.stringValue = "仍在识别，可按 Esc 退出"; self.needsLayout = true
+        }
+        work = Task { [weak self] in
+            let started = ProcessInfo.processInfo.systemUptime
             do {
-                let analysis = try await analyzer.analyze(image, orientation: .up, configuration: .init(.text))
+                let analysis = try await Self.analyzer.analyze(image, orientation: .up, configuration: .init(.text))
                 guard !Task.isCancelled, let self else { return }
-                self.recognitionFinished = true
-                self.recognizedText = analysis.transcript
-                self.overlay.analysis = analysis
-                self.overlay.selectableItemsHighlighted = false
-                self.status.isHidden = self.quiet || analysis.hasResults(for: .text)
-                self.status.stringValue = "未识别到文字"
-                self.needsLayout = true
+                Logger(subsystem: "studio.deernova.quick-snap", category: "ocr").notice("analysis-seconds=\(ProcessInfo.processInfo.systemUptime-started, privacy: .public)")
+                self.apply(analysis)
             } catch {
                 guard !Task.isCancelled, let self else { return }
-                self.recognitionFinished = true
-                self.status.stringValue = "识别失败，请重试"
-                self.toolTip = "文字识别失败，请重新打开图片"
-                self.needsLayout = true
+                self.loadingTask?.cancel(); self.progress.stopAnimation(nil); self.progress.isHidden = true
+                self.recognitionFinished = true; self.status.stringValue = "识别失败"
+                self.statusSurface.isHidden = false; self.retry.isHidden = false; self.needsLayout = true
             }
         }
     }
     required init?(coder: NSCoder) { fatalError("Not supported") }
-    deinit { work?.cancel() }
-    func stop() { work?.cancel(); work = nil; overlay.analysis = nil; feedback.hide() }
+    deinit { work?.cancel(); loadingTask?.cancel() }
+    func stop() { loadingTask?.cancel(); progress.stopAnimation(nil); work?.cancel(); work = nil; overlay.analysis = nil; feedback.hide() }
     override func layout() {
         super.layout()
-        status.frame = NSRect(x: max(0, (bounds.width-200)/2), y: max(0, (bounds.height-24)/2), width: min(200, bounds.width), height: min(24, bounds.height))
+        let width = min(bounds.width, retry.isHidden ? 220.0 : 180.0)
+        statusSurface.frame = NSRect(x: max(0, (bounds.width-width)/2), y: max(0, bounds.height-40), width: width, height: 32)
+        progress.frame = NSRect(x: 8, y: 8, width: 16, height: 16)
+        status.frame = NSRect(x: 32, y: 8, width: max(0,width-(retry.isHidden ? 40 : 88)), height: 16)
+        retry.frame = NSRect(x: width-52, y: 4, width: 48, height: 24)
     }
     @discardableResult func copyText(allIfUnselected: Bool, pasteboard: NSPasteboard = .general) -> Bool {
         let selected = overlay.selectedText

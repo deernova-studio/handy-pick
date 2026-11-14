@@ -1,7 +1,7 @@
 import AppKit
 
 public struct Annotation {
-    public enum Kind { case line, ellipse, text }
+    public enum Kind { case line, ellipse, text, rectangle, arrow }
     public var kind: Kind
     public var start: CGPoint
     public var end: CGPoint
@@ -16,6 +16,19 @@ public struct Annotation {
         switch kind {
         case .line:
             path = NSBezierPath(); path.move(to: start); path.line(to: end)
+        case .arrow:
+            let dx = end.x-start.x, dy = end.y-start.y
+            let length = hypot(dx, dy)
+            guard length >= 2 else { return }
+            let ux = dx/length, uy = dy/length
+            let head = min(14, length * 0.4)
+            path = NSBezierPath(); path.move(to: start); path.line(to: end)
+            path.move(to: CGPoint(x: end.x-ux*head-uy*head*0.5, y: end.y-uy*head+ux*head*0.5))
+            path.line(to: end)
+            path.line(to: CGPoint(x: end.x-ux*head+uy*head*0.5, y: end.y-uy*head-ux*head*0.5))
+        case .rectangle:
+            path = NSBezierPath(rect: CGRect(x: min(start.x, end.x), y: min(start.y, end.y),
+                                             width: abs(end.x-start.x), height: abs(end.y-start.y)))
         case .ellipse:
             path = NSBezierPath(ovalIn: CGRect(x: min(start.x, end.x), y: min(start.y, end.y), width: abs(end.x-start.x), height: abs(end.y-start.y)))
         case .text:

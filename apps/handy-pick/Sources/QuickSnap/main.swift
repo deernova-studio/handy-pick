@@ -14,6 +14,35 @@ import OSLog
     private let historyPreview = HistoryPreview()
     private var recentImage: NSImage?
     private var preparing = false
+    private var copyInProgress = false
+    private struct PendingPaste {
+        let id = UUID()
+        let focus: Task<InputTarget?, Never>
+        let pid: pid_t
+        let generation: Int
+        let expires: TimeInterval
+    }
+    private var pendingPaste: PendingPaste?
+    private var pendingPasteDelivery: Task<Void, Never>?
+    private var pendingInputMonitor: Any?
+    private var pendingActivationObserver: NSObjectProtocol?
+    private var actionTask: Task<Void, Never>?
+    private var actionGeneration = 0
+    private var permissionTimer: Timer?
+    private var lastPermissionsReady = false
+    private var recordingPaste = false
+    private var pasteBinding: ShortcutBinding {
+        get {
+            if let data = UserDefaults.standard.data(forKey: "pasteChordBinding"),
+               let value = try? JSONDecoder().decode(ShortcutBinding.self, from: data), ShortcutMode.chord.accepts(value) { return value }
+            return binding // Existing users retain their shared shortcut until edited.
+        }
+        set {
+            guard ShortcutMode.chord.accepts(newValue), let data = try? JSONEncoder().encode(newValue) else { return }
+            UserDefaults.standard.set(data, forKey: "pasteChordBinding")
+        }
+    }
+    private var separateChords: Bool { shortcutMode == .chord && binding != pasteBinding }
     private var message = ""
     private let gestureLog = Logger(subsystem: "studio.deernova.quick-snap", category: "gesture")
     private var shortcutMode: ShortcutMode {
@@ -60,8 +89,9 @@ import OSLog
         }
         historyPreview.onDismiss = { [weak self] in
             guard let self else { return }
-            self.trigger.suspended = self.capture.active || self.preparing
+            self.updateSuspension()
         }
+        historyPreview.onFocusChange = { [weak self] in self?.updateSuspension() }
         historyPreview.onEditedImage = { [weak self] image in
             guard let self else { return }
             self.recentImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
@@ -72,7 +102,7 @@ import OSLog
             guard let self, let entry = self.clipboard.history.entries.first(where: { $0.id == id }) else { return }
             self.shortcutPanel.dismiss()
             self.historyPreview.show(entry)
-            self.trigger.suspended = true
+            self.updateSuspension()
         }
         panel.onSelect = { [weak self] id in
             guard let self else { return }
@@ -81,7 +111,8 @@ import OSLog
         panel.onRemove = { [weak self] id in self?.clipboard.remove(id) }
         panel.onClear = { [weak self] in self?.clipboard.clear() }
         clipboard.start()
-        panel.onRecord = { [weak self] in self?.beginRecording() }
+        panel.onRecord = { [weak self] in self?.recordingPaste = false; self?.beginRecording() }
+        panel.onRecordPaste = { [weak self] in self?.recordingPaste = true; self?.beginRecording() }
         panel.onModeChange = { [weak self] mode in
             guard let self else { return }
             self.shortcutMode = mode
@@ -89,18 +120,53 @@ import OSLog
         }
         panel.onPermission = { [weak self] in self?.requestPermission() }
         trigger.onAction = { [weak self] in self?.handleShortcut($0) }
+        trigger.onPaste = { [weak self] gesture in
+            guard let self, !self.capture.active,
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier == gesture.target else { return }
+            self.shortcutPanel.dismiss()
+            self.cancelPendingPaste()
+            if self.preparing {
+                if self.copyInProgress {
+                    // Coalesce repeated presses; never paste the previous clipboard
+                    // while an explicit copy is still resolving.
+                    self.pendingPaste = PendingPaste(focus: Task { await InputTarget.focusedSnapshot(for: gesture.target) },
+                        pid: gesture.target, generation: self.actionGeneration,
+                        expires: ProcessInfo.processInfo.systemUptime + 2)
+                    self.watchPendingPasteInteraction()
+                    self.inform("复制完成后粘贴")
+                }
+                return
+            }
+            self.paste(to: gesture.target)
+        }
         trigger.onRecorded = { [weak self] value in
             guard let self else { return }
-            if let value { self.binding = value }
+            if let value {
+                if self.recordingPaste { self.pasteBinding = value } else {
+                    if self.shortcutMode == .chord, UserDefaults.standard.data(forKey: "pasteChordBinding") == nil {
+                        self.pasteBinding = self.binding
+                    }
+                    self.binding = value
+                }
+            }
+            self.recordingPaste = false
             self.startMonitoring()
             if value != nil { self.inform("已保存") }
         }
         startMonitoring()
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reconcilePermissions() }
+        }
+        timer.tolerance = 0.2
+        permissionTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { false }
 
     @objc private func statusClicked() {
+        cancelPendingPaste()
+        reconcilePermissions()
         if NSApp.currentEvent?.type == .rightMouseUp {
             shortcutPanel.dismiss()
             status.menu = makeMenu(); status.button?.performClick(nil); status.menu = nil
@@ -108,6 +174,7 @@ import OSLog
     }
 
     private func togglePopover() {
+        cancelPendingPaste()
         if shortcutPanel.isVisible { shortcutPanel.dismiss(); return }
         historyPreview.dismiss()
         guard let button = status.button else { return }
@@ -116,8 +183,11 @@ import OSLog
     }
 
     private func refresh() {
-        status.button?.toolTip = "\(AppIdentity.displayName) · \(shortcutMode == .doublePress ? "双击" : "按下")\(binding.displayName)复制 / 粘贴 / 截图\n\(message)"
-        panel.update(binding: binding.displayName, recording: trigger.recording, needsPermission: !permissionsReady, mode: shortcutMode)
+        let shortcuts = separateChords
+            ? "\(binding.displayName) 复制 / 截图 · \(pasteBinding.displayName) 粘贴"
+            : "\(shortcutMode == .doublePress ? "双击" : "按下")\(binding.displayName) 复制 / 粘贴 / 截图"
+        status.button?.toolTip = "\(AppIdentity.displayName) · \(shortcuts)\n\(message)"
+        panel.update(binding: binding.displayName, recording: trigger.recording, needsPermission: !permissionsReady, mode: shortcutMode, pasteBinding: pasteBinding.displayName, recordingPaste: recordingPaste)
     }
     private func inform(_ text: String) { message = text; refresh() }
 
@@ -128,15 +198,37 @@ import OSLog
         UserDefaults.standard.set(outcome, forKey: "lastGestureOutcome")
     }
 
+    private func updateSuspension() {
+        trigger.suspended = capture.active || preparing || historyPreview.window?.isKeyWindow == true
+    }
+
+    private func reconcilePermissions() {
+        guard permissionsReady != lastPermissionsReady else { return }
+        startMonitoring()
+    }
+
+    private func cancelPendingAction() {
+        cancelPendingPaste(); copyInProgress = false
+        actionGeneration &+= 1
+        actionTask?.cancel(); actionTask = nil
+        preparing = false
+        capture.cancel()
+        updateSuspension()
+    }
+
     private func startMonitoring() {
+        cancelPendingAction()
         trigger.stop(); trigger.mode = shortcutMode; trigger.binding = binding
-        trigger.suspended = historyPreview.window != nil
-        guard permissionsReady else { inform("需要屏幕录制和辅助功能权限"); return }
+        trigger.pasteBinding = shortcutMode == .chord ? pasteBinding : nil
+        updateSuspension()
+        lastPermissionsReady = permissionsReady
+        guard lastPermissionsReady else { inform("需要屏幕录制和辅助功能权限"); return }
         guard monitoringWanted else { inform("已暂停"); return }
         inform(trigger.start(active: true) ? "已启用" : "无法监听，请检查辅助功能权限")
     }
 
     private func beginRecording() {
+        cancelPendingPaste()
         guard AXIsProcessTrusted() else { requestPermission(); return }
         if trigger.beginRecording() { inform("录入后立即保存") }
         else { inform("无法录入，请检查辅助功能权限") }
@@ -144,7 +236,7 @@ import OSLog
 
     @objc private func toggle() {
         monitoringWanted = !trigger.running
-        capture.cancel(); startMonitoring()
+        startMonitoring()
     }
 
     private func makeMenu() -> NSMenu {
@@ -169,26 +261,41 @@ import OSLog
     @objc private func startFromMenu() {
         historyPreview.dismiss()
         shortcutPanel.dismiss()
-        DispatchQueue.main.asyncAfter(deadline: .now()+0.15) { self.beginCapture() }
+        beginCapture(delay: .milliseconds(150))
     }
-    private func beginCapture() {
+    private func beginCapture(delay: Duration = .zero) {
         guard !capture.active, !preparing else { return }
         guard CGPreflightScreenCaptureAccess() else { inform("请先授予屏幕录制权限"); return }
+        cancelPendingPaste(); copyInProgress = false
         copyFeedback.hide()
         shortcutPanel.dismiss(); preparing = true; trigger.suspended = true
-        Task {
-            defer { preparing = false }
+        actionGeneration &+= 1
+        let generation = actionGeneration
+        actionTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if generation == actionGeneration {
+                    preparing = false; actionTask = nil; updateSuspension()
+                }
+            }
             do {
+                if delay > .zero { try await Task.sleep(for: delay) }
+                try Task.checkCancellation()
                 let frames = try await capture.captureScreens()
+                try Task.checkCancellation()
+                guard generation == actionGeneration else { return }
                 capture.show(frames) { [weak self] image in
-                    guard let self else { return }
-                    self.trigger.suspended = false
+                    guard let self, generation == self.actionGeneration else { return }
+                    self.updateSuspension()
                     guard let image else { self.inform("已取消"); return }
                     self.recentImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
                     self.copyRecent(); self.inform("截图已复制")
                     NSSound(named: "Pop")?.play()
                 }
-            } catch { trigger.suspended = false; inform("截图失败：\(error.localizedDescription)") }
+            } catch {
+                guard generation == actionGeneration, !Task.isCancelled else { return }
+                inform("截图失败：\(error.localizedDescription)")
+            }
         }
     }
     private func handleShortcut(_ gesture: ClickRecognizer.Gesture) {
@@ -198,10 +305,22 @@ import OSLog
             return
         }
         shortcutPanel.dismiss()
-        preparing = true
-        Task { [weak self] in
+        preparing = true; copyInProgress = separateChords
+        cancelPendingPaste()
+        actionGeneration &+= 1
+        let generation = actionGeneration
+        actionTask = Task { [weak self] in
             guard let self else { return }
-            let action = await InputTarget.resolve(at: gesture.point, foregroundPID: gesture.target)
+            var copiedChangeCount: Int?
+            defer {
+                if generation == self.actionGeneration {
+                    self.preparing = false; self.copyInProgress = false
+                    self.actionTask = nil; self.updateSuspension()
+                    self.finishPendingPaste(generation: generation, copiedChangeCount: copiedChangeCount)
+                }
+            }
+            let action = await InputTarget.resolve(at: gesture.point, foregroundPID: gesture.target, copyOnly: self.separateChords, keyboard: gesture.keyboard)
+            guard !Task.isCancelled, generation == self.actionGeneration else { return }
             guard self.trigger.running, !self.capture.active,
                   NSWorkspace.shared.frontmostApplication?.processIdentifier == gesture.target else {
                 self.preparing = false; return
@@ -212,6 +331,7 @@ import OSLog
                 self.preparing = false
                 NSPasteboard.general.clearContents()
                 if NSPasteboard.general.setString(text, forType: .string) {
+                    copiedChangeCount = NSPasteboard.general.changeCount
                     self.clipboard.poll()
                     self.recordGestureOutcome("selected-text-copied")
                     self.inform("已复制选中文字")
@@ -219,6 +339,7 @@ import OSLog
                 } else { self.inform("复制失败，请重试") }
                 return
             case .unavailable:
+                self.inform("尚未确认输入位置，请点击目标后重试")
                 self.preparing = false; return
             case .capture:
                 self.preparing = false
@@ -226,20 +347,19 @@ import OSLog
                 self.beginCapture(); return
             case .paste(let target): input = target
             }
-            defer { self.preparing = false }
             guard input.copyTerminalSelectionFirst || !(NSPasteboard.general.types?.isEmpty ?? true) else {
                 self.recordGestureOutcome("input-found-empty-clipboard")
                 self.inform("剪贴板为空"); NSSound.beep(); return
             }
             self.recordGestureOutcome("input-found-focus-pending")
-            input.focus()
+            await input.focus()
             // Native and web editors may update accessibility focus asynchronously.
             for _ in 0..<10 {
                 try? await Task.sleep(for: .milliseconds(60))
-                guard self.trigger.running, !self.capture.active else { return }
-                if input.isFocused() {
+                guard !Task.isCancelled, self.trigger.running, !self.capture.active else { return }
+                if await input.isFocused() {
                     if input.copyTerminalSelectionFirst {
-                        await self.copyOrPasteTerminal(input, at: gesture.point)
+                        await self.copyOrPasteTerminal(input, at: gesture.point, copyOnly: self.separateChords)
                     } else { self.paste(to: input.pid) }
                     return
                 }
@@ -249,26 +369,30 @@ import OSLog
         }
     }
 
-    private func copyOrPasteTerminal(_ input: InputTarget, at point: CGPoint) async {
-        guard input.isFocused() else { return }
+    private func copyOrPasteTerminal(_ input: InputTarget, at point: CGPoint, copyOnly: Bool) async {
+        guard await input.isFocused() else { return }
         let changeCount = NSPasteboard.general.changeCount
         // macOS uses the native copy event; Codex's Ctrl-Shift-C clipboard
         // handler is enabled only on non-macOS platforms. Never send Ctrl-C.
+        guard !Task.isCancelled, NSWorkspace.shared.frontmostApplication?.processIdentifier == input.pid else { return }
         postShortcut(key: 8, flags: .maskCommand)
         for _ in 0..<12 {
             try? await Task.sleep(for: .milliseconds(50))
-            guard trigger.running, !capture.active, input.isFocused() else { return }
+            guard !Task.isCancelled, trigger.running, !capture.active, await input.isFocused() else { return }
             if NSPasteboard.general.changeCount != changeCount {
                 clipboard.poll()
-                recordGestureOutcome("terminal-selection-copied")
-                inform("已复制选中文字"); copyFeedback.show()
+                // changeCount has no writer identity. It must never authorize
+                // delayed paste, even when a native Cmd-C was just requested.
+                recordGestureOutcome("terminal-clipboard-change-unverified")
+                inform("剪贴板已变化，请确认内容后按粘贴键")
                 return
             }
         }
+        guard !copyOnly else { preparing = false; beginCapture(); return }
         // Recheck the same terminal surface before the fallback paste, so a
         // focus change or panel closing during the async copy cannot redirect it.
-        guard let current = InputTarget.at(point), current.copyTerminalSelectionFirst,
-              current.pid == input.pid, CFEqual(current.element, input.element), input.isFocused() else { return }
+        guard !Task.isCancelled, let current = await InputTarget.lookup(at: point), current.copyTerminalSelectionFirst,
+              current.pid == input.pid, CFEqual(current.element, input.element), await input.isFocused() else { return }
         // Clipboard writers can run while the synchronous AX recheck is waiting.
         // Do not paste if the copy completed (or another writer intervened) then.
         guard NSPasteboard.general.changeCount == changeCount else { return }
@@ -276,6 +400,55 @@ import OSLog
             recordGestureOutcome("input-found-empty-clipboard"); inform("剪贴板为空"); return
         }
         paste(to: input.pid)
+        return
+    }
+
+    private func cancelPendingPaste() {
+        pendingPaste?.focus.cancel(); pendingPaste = nil
+        pendingPasteDelivery?.cancel(); pendingPasteDelivery = nil
+        if let monitor = pendingInputMonitor { NSEvent.removeMonitor(monitor) }
+        pendingInputMonitor = nil
+        if let observer = pendingActivationObserver { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
+        pendingActivationObserver = nil
+    }
+
+    private func watchPendingPasteInteraction() {
+        // Cancel before an intervening click/Tab can retarget the delayed paste,
+        // including input that arrives while the initial AX snapshot is pending.
+        pendingInputMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
+            guard event.cgEvent?.getIntegerValueField(.eventSourceUserData) != ShortcutTrigger.syntheticEventTag else { return }
+            MainActor.assumeIsolated { self?.cancelPendingPaste() }
+        }
+        pendingActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.cancelPendingPaste() } }
+    }
+
+    private func finishPendingPaste(generation: Int, copiedChangeCount: Int?) {
+        guard let pending = pendingPaste else { return }
+        // Only the direct AX-copy branch writes and identifies our clipboard
+        // content. Terminal Cmd-C cannot prove who updated the clipboard.
+        guard let copiedChangeCount, !Task.isCancelled else {
+            cancelPendingPaste(); inform("等待粘贴已取消，请确认内容后按粘贴键"); return
+        }
+        pendingPasteDelivery = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if self.pendingPaste?.id == pending.id { self.cancelPendingPaste() }
+            }
+            @MainActor func valid() -> Bool {
+                !Task.isCancelled && self.pendingPaste?.id == pending.id
+                    && self.actionGeneration == generation && pending.generation == generation
+                    && NSPasteboard.general.changeCount == copiedChangeCount
+                    && ProcessInfo.processInfo.systemUptime < pending.expires
+                    && self.trigger.running && !self.capture.active && !self.preparing && !self.trigger.recording
+                    && self.historyPreview.window?.isKeyWindow != true
+                    && NSWorkspace.shared.frontmostApplication?.processIdentifier == pending.pid
+            }
+            guard valid(), let target = await pending.focus.value, valid(),
+                  await target.hasExactFocus(), valid() else { return }
+            self.paste(to: pending.pid)
+        }
     }
 
     @objc private func copyRecent() {
@@ -288,7 +461,7 @@ import OSLog
         copyFeedback.show()
     }
     private func paste(to pid: Int32) {
-        guard AXIsProcessTrusted(), pid > 0,
+        guard !Task.isCancelled, AXIsProcessTrusted(), pid > 0,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
         postShortcut(key: 9, flags: .maskCommand)
         recordGestureOutcome("paste-shortcut-posted")
@@ -317,8 +490,8 @@ import OSLog
     private func openSettings(_ section: String) {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(section)") { NSWorkspace.shared.open(url) }
     }
-    @objc private func quit() { trigger.stop(); capture.cancel(); NSApp.terminate(nil) }
-    func applicationWillTerminate(_ notification: Notification) { trigger.stop(); historyPreview.dismiss(); clipboard.stop(); clipboard.clear() }
+    @objc private func quit() { cancelPendingAction(); trigger.stop(); NSApp.terminate(nil) }
+    func applicationWillTerminate(_ notification: Notification) { permissionTimer?.invalidate(); cancelPendingAction(); trigger.stop(); historyPreview.dismiss(); clipboard.stop(); clipboard.clear() }
 }
 
 MainActor.assumeIsolated {

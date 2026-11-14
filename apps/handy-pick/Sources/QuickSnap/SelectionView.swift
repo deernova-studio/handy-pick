@@ -1,10 +1,13 @@
 import AppKit
+import VisionKit
 import QuickSnapCore
 
 final class SelectionView: NSView, NSTextFieldDelegate {
-    static let toolbarWidth: CGFloat = 306
+    static let toolbarWidth: CGFloat = 390
+    private static let annotationTools: [Int: Annotation.Kind] = [0: .line, 1: .ellipse, 2: .text, 7: .rectangle, 8: .arrow]
     private(set) var textSelection: ImageTextSelection?
-    var toolbarContentWidth: CGFloat { editsWholeImage ? 264 : Self.toolbarWidth }
+    var toolbarContentWidth: CGFloat { editsWholeImage ? 348 : Self.toolbarWidth }
+    private var cachedAnalysis: ImageAnalysis?
     let image: CGImage
     private let editsWholeImage: Bool
     var onComplete: ((CGImage?) -> Void)?
@@ -125,7 +128,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
                 moveDrag = (point, selection)
                 moveDidStart = false
             }
-        } else { start = point; selection = .zero }
+        } else { cachedAnalysis = nil; start = point; selection = .zero }
         needsDisplay = true
     }
     override func mouseDragged(with event: NSEvent) {
@@ -161,7 +164,9 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         if editing {
             if var draft {
                 draft.end = clamped(convert(event.locationInWindow, from: nil))
-                if hypot(draft.end.x-draft.start.x, draft.end.y-draft.start.y) >= 2 { annotations.append(draft) }
+                if hypot(draft.end.x-draft.start.x, draft.end.y-draft.start.y) >= 2 {
+                    cachedAnalysis = nil; annotations.append(draft)
+                }
             }
             draft = nil; needsDisplay = true; return
         }
@@ -172,6 +177,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         editing = true; showToolbar(); needsDisplay = true
     }
     private func resize(to point: CGPoint, drag: (handle: SelectionGeometry.Handle, origin: CGPoint, rect: CGRect)) {
+        cachedAnalysis = nil
         selection = SelectionGeometry.resized(drag.rect, handle: drag.handle,
             delta: CGPoint(x: point.x-drag.origin.x, y: point.y-drag.origin.y), in: bounds)
         needsDisplay = true
@@ -184,6 +190,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         let next = SelectionGeometry.moved(drag.rect,
             delta: CGPoint(x: point.x-drag.origin.x, y: point.y-drag.origin.y), in: bounds)
         let dx = next.minX-selection.minX, dy = next.minY-selection.minY
+        if dx != 0 || dy != 0 { cachedAnalysis = nil }
         for index in annotations.indices {
             annotations[index].start.x += dx; annotations[index].start.y += dy
             annotations[index].end.x += dx; annotations[index].end.y += dy
@@ -206,15 +213,15 @@ final class SelectionView: NSView, NSTextFieldDelegate {
     }
     func makeToolbar() -> PaperlightGlass {
         let bar = PaperlightGlass(frame: NSRect(x: 0, y: 0, width: toolbarContentWidth, height: 44), radius: 22)
-        let symbols = ["line.diagonal", "circle", "textformat", "arrow.uturn.backward", "xmark", "checkmark", "text.viewfinder"]
-        let labels = ["划线", "画圈", "文字", "撤销", "取消", editsWholeImage ? "复制图片" : "复制截图", "识别并选取文字"]
-        let items: [Int] = editsWholeImage ? [0, 1, 2, 3, 4, 5] : [0, 1, 2, 6, 3, 4, 5]
+        let symbols = ["line.diagonal", "circle", "textformat", "arrow.uturn.backward", "xmark", "checkmark", "text.viewfinder", "rectangle", "arrow.up.right"]
+        let labels = ["划线", "画圈", "文字", "撤销", "取消", editsWholeImage ? "复制图片" : "复制截图", "识别并选取文字", "方框", "箭头"]
+        let items: [Int] = editsWholeImage ? [0, 7, 1, 8, 2, 3, 4, 5] : [0, 7, 1, 8, 2, 6, 3, 4, 5]
         for (position, index) in items.enumerated() {
             let button = PaperlightButton(image: NSImage(systemSymbolName: symbols[index], accessibilityDescription: labels[index])!, target: self, action: #selector(toolbarClicked(_:)))
             if index == 2 { button.image = nil; button.drawsTitleInsteadOfImage = true; button.title = "T"; button.font = .systemFont(ofSize: 18, weight: .semibold) }
             button.frame = NSRect(x: 8 + CGFloat(position)*42, y: 4, width: 36, height: 36)
             button.tag = index; button.isBordered = false; button.cornerRadius = 18; button.toolTip = labels[index]
-            button.setAccessibilityLabel(labels[index]); button.setButtonType(index < 3 || index == 6 ? .toggle : .momentaryPushIn)
+            button.setAccessibilityLabel(labels[index]); button.setButtonType(Self.annotationTools[index] != nil || index == 6 ? .toggle : .momentaryPushIn)
             button.style = index == 5 ? .primary : .plain
             button.isOnGlass = true
             bar.content.addSubview(button); toolButtons.append(button)
@@ -225,17 +232,17 @@ final class SelectionView: NSView, NSTextFieldDelegate {
     @objc private func toolbarClicked(_ sender: NSButton) {
         commitText(); window?.makeFirstResponder(self)
         switch sender.tag {
-        case 0...2:
-            if textSelection == nil, tool == [.line, .ellipse, .text][sender.tag] {
+        case 0...2, 7, 8:
+            if textSelection == nil, tool == Self.annotationTools[sender.tag] {
                 tool = nil
-                for button in toolButtons.prefix(3) { button.state = .off }
+                for button in toolButtons.filter({ Self.annotationTools[$0.tag] != nil }) { button.state = .off }
                 if editsWholeImage { beginTextSelection() }
                 window?.invalidateCursorRects(for: self)
                 return
             }
             endTextSelection()
-            tool = [.line, .ellipse, .text][sender.tag]
-            for button in toolButtons.prefix(3) { button.state = button.tag == sender.tag ? .on : .off }
+            tool = Self.annotationTools[sender.tag]
+            for button in toolButtons.filter({ Self.annotationTools[$0.tag] != nil }) { button.state = button.tag == sender.tag ? .on : .off }
             window?.invalidateCursorRects(for: self)
         case 3: undoAnnotation()
         case 4: onComplete?(nil)
@@ -256,7 +263,8 @@ final class SelectionView: NSView, NSTextFieldDelegate {
     }
     private func beginTextSelection() {
         guard textSelection == nil, let crop = AnnotationRenderer.render(image: image, selection: selection, logicalSize: bounds.size, annotations: annotations) else { return }
-        let layer = ImageTextSelection(image: crop, frame: selection, quiet: editsWholeImage)
+        let layer = ImageTextSelection(image: crop, frame: selection, quiet: editsWholeImage, cached: cachedAnalysis)
+        layer.onAnalysis = { [weak self] in self?.cachedAnalysis = $0 }
         layer.onCancel = { [weak self] in
             guard let self else { return }
             if self.editsWholeImage { self.onComplete?(nil) }
@@ -266,7 +274,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         layer.onUndo = { [weak self] in self?.undoAnnotation() }
         textSelection = layer
         addSubview(layer, positioned: .below, relativeTo: toolbar)
-        for button in toolButtons { if button.tag < 3 || button.tag == 6 { button.state = button.tag == 6 ? .on : .off } }
+        for button in toolButtons { if Self.annotationTools[button.tag] != nil || button.tag == 6 { button.state = button.tag == 6 ? .on : .off } }
         if !editsWholeImage {
             toolButtons.first { $0.tag == 5 }?.toolTip = "复制文字（未选中时复制全部）"
             toolButtons.first { $0.tag == 5 }?.setAccessibilityLabel("复制文字")
@@ -276,7 +284,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
     private func endTextSelection() {
         textSelection?.stop(); textSelection?.removeFromSuperview(); textSelection = nil
         for button in toolButtons {
-            if button.tag < 3 { button.state = [.line, .ellipse, .text][button.tag] == tool ? .on : .off }
+            if let kind = Self.annotationTools[button.tag] { button.state = kind == tool ? .on : .off }
             if button.tag == 6 { button.state = .off }
             if button.tag == 5 {
                 button.toolTip = editsWholeImage ? "复制图片" : "复制截图"
@@ -306,7 +314,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         guard let field = textField else { return }
         textField = nil
         let text = field.stringValue
-        if !text.isEmpty { annotations.append(Annotation(kind: .text, start: textOrigin, end: textOrigin, text: text)) }
+        if !text.isEmpty { cachedAnalysis = nil; annotations.append(Annotation(kind: .text, start: textOrigin, end: textOrigin, text: text)) }
         field.removeFromSuperview(); needsDisplay = true
     }
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
@@ -319,6 +327,7 @@ final class SelectionView: NSView, NSTextFieldDelegate {
         return false
     }
     private func undoAnnotation() {
+        cachedAnalysis = nil
         let restoreSelection = editsWholeImage && textSelection != nil
         endTextSelection(); commitText()
         if !annotations.isEmpty { annotations.removeLast(); needsDisplay = true }

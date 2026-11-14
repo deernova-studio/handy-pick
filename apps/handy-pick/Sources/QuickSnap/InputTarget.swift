@@ -3,7 +3,7 @@ import ApplicationServices
 import QuickSnapCore
 import OSLog
 
-@MainActor struct InputTarget {
+struct InputTarget: @unchecked Sendable {
     enum Action {
         case copy(String)
         case paste(InputTarget)
@@ -16,21 +16,128 @@ import OSLog
     // native Cmd-C copy event reads the terminal's own selection.
     var copyTerminalSelectionFirst = false
 
-    static func resolve(at point: CGPoint, foregroundPID: pid_t) async -> Action {
-        let enabledWebAccessibility = enableWebAccessibility(for: foregroundPID)
-        // Chromium publishes its renderer accessibility tree asynchronously.
-        if enabledWebAccessibility { try? await Task.sleep(for: .milliseconds(100)) }
-        for attempt in 0..<(enabledWebAccessibility ? 4 : 1) {
-            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == foregroundPID else { return .unavailable }
-            let input = at(point)
-            // xterm's helper may retain a prior paste in AXSelectedText. Ask the
-            // terminal to copy its real selection instead of trusting that buffer.
-            if let input, input.pid == foregroundPID, input.copyTerminalSelectionFirst { return .paste(input) }
-            if let text = selectedText(at: point, foregroundPID: foregroundPID) { return .copy(text) }
-            if let input, input.pid == foregroundPID { return .paste(input) }
-            if attempt < 3, enabledWebAccessibility { try? await Task.sleep(for: .milliseconds(80)) }
+    // Blocking AX calls stay on worker queues, including focus checks.
+    // A shared absolute deadline covers all retries, not one budget per attribute.
+    private static let queue = DispatchQueue(label: "handypick.accessibility", qos: .userInitiated)
+    private static let focusQueue = DispatchQueue(label: "handypick.focus-snapshot", qos: .userInitiated)
+    private static let requestKey = "handypick.ax.request"
+    private final class Request: @unchecked Sendable {
+        let deadline: TimeInterval
+        private let lock = NSLock()
+        private var cancelled = false
+        init(deadline: TimeInterval) { self.deadline = deadline }
+        func cancel() { lock.lock(); cancelled = true; lock.unlock() }
+        var remaining: TimeInterval {
+            lock.lock(); defer { lock.unlock() }
+            return cancelled ? 0 : deadline - ProcessInfo.processInfo.systemUptime
         }
-        return .capture
+    }
+    private static func perform<T>(until deadline: TimeInterval, on worker: DispatchQueue? = nil, _ operation: @escaping () -> T) async -> T {
+        let request = Request(deadline: deadline)
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                (worker ?? queue).async {
+                    Thread.current.threadDictionary[requestKey] = request
+                    defer { Thread.current.threadDictionary.removeObject(forKey: requestKey) }
+                    continuation.resume(returning: operation())
+                }
+            }
+        } onCancel: { request.cancel() }
+    }
+    private static func prepare(_ element: AXUIElement) -> Bool {
+        guard let request = Thread.current.threadDictionary[requestKey] as? Request else { return false }
+        let remaining = request.remaining
+        guard remaining > 0 else { return false }
+        AXUIElementSetMessagingTimeout(element, Float(min(0.05, remaining)))
+        return true
+    }
+
+    @MainActor static func resolve(at point: CGPoint, foregroundPID: pid_t, copyOnly: Bool = false, keyboard: Bool = false) async -> Action {
+        let deadline = ProcessInfo.processInfo.systemUptime + 0.9
+        let enabled = await perform(until: deadline) { enableWebAccessibility(for: foregroundPID) }
+        if enabled { try? await Task.sleep(for: .milliseconds(100)) }
+        for attempt in 0..<4 {
+            guard !Task.isCancelled, ProcessInfo.processInfo.systemUptime < deadline,
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier == foregroundPID else { return .unavailable }
+            let result: Action? = await perform(until: deadline) {
+                if keyboard && copyOnly {
+                    let app = AXUIElementCreateApplication(foregroundPID)
+                    guard let focused = elementAttribute(app, kAXFocusedUIElementAttribute) else { return nil }
+                    if let rect = bounds(of: focused),
+                       let terminal = focusedEmbeddedTerminal(at: CGPoint(x: rect.midX, y: rect.midY), hit: focused, hitPID: foregroundPID) {
+                        return .paste(terminal)
+                    }
+                    if let text = selectedText(from: focused) { return .copy(text) }
+                    return nil
+                }
+                let input = at(point)
+                if let input, input.pid == foregroundPID, input.copyTerminalSelectionFirst { return .paste(input) }
+                if let text = selectedText(at: point, foregroundPID: foregroundPID) { return .copy(text) }
+                if let input, input.pid == foregroundPID { return copyOnly ? .capture : .paste(input) }
+                return nil
+            }
+            guard !Task.isCancelled, NSWorkspace.shared.frontmostApplication?.processIdentifier == foregroundPID else { return .unavailable }
+            if ProcessInfo.processInfo.systemUptime >= deadline { return .unavailable }
+            if let result { return result }
+            if attempt < 3 { try? await Task.sleep(for: .milliseconds(80)) }
+        }
+        if copyOnly { return .capture }
+        let background = await perform(until: deadline) { canConfirmBackground(at: point, pid: foregroundPID) }
+        guard !Task.isCancelled, NSWorkspace.shared.frontmostApplication?.processIdentifier == foregroundPID else { return .unavailable }
+        guard ProcessInfo.processInfo.systemUptime < deadline else { return .unavailable }
+        return background ? .capture : .unavailable
+    }
+
+    static func lookup(at point: CGPoint) async -> InputTarget? {
+        await perform(until: ProcessInfo.processInfo.systemUptime + 0.25) { at(point) }
+    }
+
+    private static func canConfirmBackground(at point: CGPoint, pid: pid_t) -> Bool {
+        let system = AXUIElementCreateSystemWide()
+        _ = prepare(system)
+        var hit: AXUIElement?
+        guard prepare(system), AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &hit) == .success,
+              let hit else { return false }
+        var hitPID: pid_t = 0
+        guard AXUIElementGetPid(hit, &hitPID) == .success, hitPID > 0,
+              hitPID != ProcessInfo.processInfo.processIdentifier else { return false }
+        // Capture does not send input to this window. It may belong to Finder
+        // or another inactive app; never reuse this exception for copy/paste.
+        if hitPID != pid { return true }
+        // A generic container is not proof of background. In particular,
+        // contenteditable controls may expose AXGroup rather than AXTextArea.
+        guard isConfirmedBackgroundElement(hit) else { return false }
+        let app = AXUIElementCreateApplication(pid)
+        if let focused = elementAttribute(app, kAXFocusedUIElementAttribute),
+           let rect = bounds(of: focused), rect.contains(point) {
+            guard let role = attribute(focused, kAXRoleAttribute) as? String else { return false }
+            // A focused window covers all its controls; it is not an editor.
+            if !["AXWindow", "AXApplication"].contains(role),
+               !isConfirmedBackgroundElement(focused) { return false }
+        }
+        return true
+    }
+
+    private static func isConfirmedBackgroundElement(_ start: AXUIElement) -> Bool {
+        var current = start
+        var confirmedLeaf = false
+        for _ in 0..<12 {
+            guard let role = attribute(current, kAXRoleAttribute) as? String else { return false }
+            if ["AXTextArea", "AXTextField", "AXComboBox", "AXUnknown"].contains(role) { return false }
+            if ["AXWindow", "AXApplication"].contains(role) { return confirmedLeaf }
+            let editable = attribute(current, kAXIsEditableAttribute) as? Bool
+            if editable == true || webEditableHost(of: current) != nil { return false }
+            if ["AXGroup", "AXWebArea", "AXScrollArea"].contains(role) {
+                // Missing editability on these roles means unknown, not false.
+                guard editable == false else { return false }
+                confirmedLeaf = true
+            } else if ["AXButton", "AXImage", "AXStaticText", "AXLink", "AXToolbar", "AXMenuBar", "AXMenuItem"].contains(role) {
+                confirmedLeaf = true
+            } else { return false }
+            guard let parent = elementAttribute(current, kAXParentAttribute), !CFEqual(parent, current) else { return false }
+            current = parent
+        }
+        return false
     }
 
     /// Read only the explicit selection under the pointer. Never read a whole
@@ -39,17 +146,21 @@ import OSLog
         guard AXIsProcessTrusted(), foregroundPID > 0,
               foregroundPID != ProcessInfo.processInfo.processIdentifier else { return nil }
         let system = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(system, 0.1)
+        _ = prepare(system)
         var hit: AXUIElement?
-        guard AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &hit) == .success,
+        guard prepare(system), AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &hit) == .success,
               let hit else { return nil }
         var hitPID: pid_t = 0
         guard AXUIElementGetPid(hit, &hitPID) == .success, hitPID == foregroundPID else { return nil }
-        var current: AXUIElement? = hit
+        return selectedText(from: hit)
+    }
+
+    private static func selectedText(from start: AXUIElement) -> String? {
+        var current: AXUIElement? = start
         let deadline = ProcessInfo.processInfo.systemUptime + 0.35
         for _ in 0..<12 {
             guard let element = current, ProcessInfo.processInfo.systemUptime < deadline else { break }
-            AXUIElementSetMessagingTimeout(element, 0.1)
+            _ = prepare(element)
             let secure = attribute(element, kAXSubroleAttribute) as? String == kAXSecureTextFieldSubrole as String
             if secure { return nil }
             let role = attribute(element, kAXRoleAttribute) as? String ?? ""
@@ -63,7 +174,7 @@ import OSLog
                 var range = CFRange()
                 if AXValueGetValue(unsafeBitCast(value, to: AXValue.self), .cfRange, &range), range.length > 0 {
                     var selected: CFTypeRef?
-                    if AXUIElementCopyParameterizedAttributeValue(element,
+                    if prepare(element), AXUIElementCopyParameterizedAttributeValue(element,
                         kAXStringForRangeParameterizedAttribute as CFString, value, &selected) == .success,
                        let text = selected as? String, InputPolicy.canCopySelection(text, secure: secure) { return text }
                 }
@@ -85,19 +196,20 @@ import OSLog
         let frameworks = bundle.appendingPathComponent("Contents/Frameworks")
         guard FileManager.default.fileExists(atPath: frameworks.appendingPathComponent("Electron Framework.framework").path) else { return false }
         let app = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(app, 0.1)
+        _ = prepare(app)
         let name = "AXManualAccessibility"
         guard attribute(app, name) as? Bool != true else { return false }
+        guard prepare(app) else { return false }
         return AXUIElementSetAttributeValue(app, name as CFString, kCFBooleanTrue) == .success
     }
 
     /// Hit-test the pointer location, never just the previously focused input.
-    static func at(_ point: CGPoint) -> InputTarget? {
+    private static func at(_ point: CGPoint) -> InputTarget? {
         guard AXIsProcessTrusted() else { return nil }
         let system = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(system, 0.1)
+        _ = prepare(system)
         var hit: AXUIElement?
-        guard AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &hit) == .success,
+        guard prepare(system), AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &hit) == .success,
               let hit else { return nil }
         var hitPID: pid_t = 0
         guard AXUIElementGetPid(hit, &hitPID) == .success,
@@ -109,7 +221,7 @@ import OSLog
         // Text inside a web editor may be a child of the editable control.
         for _ in 0..<12 {
             guard let element = current, ProcessInfo.processInfo.systemUptime < deadline else { break }
-            AXUIElementSetMessagingTimeout(element, 0.1)
+            _ = prepare(element)
             let role = attribute(element, kAXRoleAttribute) as? String ?? ""
             let secure = (attribute(element, kAXSubroleAttribute) as? String) == (kAXSecureTextFieldSubrole as String)
             // Secure fields reject content reads, not user-initiated paste.
@@ -149,9 +261,9 @@ import OSLog
         let bundleID = NSRunningApplication(processIdentifier: hitPID)?.bundleIdentifier
         guard bundleID == "com.apple.Terminal" else { return nil }
         let app = AXUIElementCreateApplication(hitPID)
-        AXUIElementSetMessagingTimeout(app, 0.1)
+        _ = prepare(app)
         guard let focused = elementAttribute(app, kAXFocusedUIElementAttribute) else { return nil }
-        AXUIElementSetMessagingTimeout(focused, 0.1)
+        _ = prepare(focused)
         var focusedPID: pid_t = 0
         guard AXUIElementGetPid(focused, &focusedPID) == .success,
               let rect = bounds(of: focused),
@@ -167,9 +279,9 @@ import OSLog
     private static func focusedEmbeddedTerminal(at point: CGPoint, hit: AXUIElement, hitPID: pid_t) -> InputTarget? {
         guard NSRunningApplication(processIdentifier: hitPID)?.bundleIdentifier == "com.openai.codex" else { return nil }
         let app = AXUIElementCreateApplication(hitPID)
-        AXUIElementSetMessagingTimeout(app, 0.1)
+        _ = prepare(app)
         guard let focused = elementAttribute(app, kAXFocusedUIElementAttribute) else { return nil }
-        AXUIElementSetMessagingTimeout(focused, 0.1)
+        _ = prepare(focused)
         var focusedPID: pid_t = 0
         guard AXUIElementGetPid(focused, &focusedPID) == .success, focusedPID == hitPID else { return nil }
         let classes = attribute(focused, kAXDOMClassListAttribute as String) as? [String] ?? []
@@ -215,7 +327,7 @@ import OSLog
         let deadline = ProcessInfo.processInfo.systemUptime + 0.2
         for _ in 0..<12 {
             guard let element = current, ProcessInfo.processInfo.systemUptime < deadline else { break }
-            AXUIElementSetMessagingTimeout(element, 0.05)
+            _ = prepare(element)
             let role = attribute(element, kAXRoleAttribute) as? String ?? ""
             if [kAXWindowRole as String, kAXApplicationRole as String].contains(role) { break }
             result.append(element)
@@ -227,7 +339,7 @@ import OSLog
     }
 
     private static func target(for element: AXUIElement, webHost: Bool = false) -> InputTarget? {
-        AXUIElementSetMessagingTimeout(element, 0.1)
+        _ = prepare(element)
         let role = attribute(element, kAXRoleAttribute) as? String ?? ""
         let secure = attribute(element, kAXSubroleAttribute) as? String == kAXSecureTextFieldSubrole as String
         let editable = attribute(element, kAXIsEditableAttribute) as? Bool
@@ -243,7 +355,7 @@ import OSLog
 
     private static func webEditableHost(of element: AXUIElement) -> AXUIElement? {
         var names: CFArray?
-        guard AXUIElementCopyAttributeNames(element, &names) == .success,
+        guard prepare(element), AXUIElementCopyAttributeNames(element, &names) == .success,
               let names = names as? [String], names.contains("AXEditableAncestor") else { return nil }
         // Requiring the attribute to be advertised matters: Chromium's getter can
         // otherwise return a text-field ancestor even when the queried node is read-only.
@@ -265,16 +377,43 @@ import OSLog
         return unsafeBitCast(value, to: AXUIElement.self)
     }
 
-    func focus() {
-        // Refocusing an already focused web textarea can reset its selection.
-        if isFocused() { return }
-        if NSWorkspace.shared.frontmostApplication?.processIdentifier != pid {
-            NSRunningApplication(processIdentifier: pid)?.activate(options: [])
+    // Snapshot only identity, never field contents. A separate queue avoids
+    // recording a new destination after waiting behind a slow copy lookup.
+    static func focusedSnapshot(for pid: pid_t) async -> InputTarget? {
+        let deadline = ProcessInfo.processInfo.systemUptime + 0.2
+        let result = await perform(until: deadline, on: focusQueue) { () -> InputTarget? in
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+                  let focused = elementAttribute(AXUIElementCreateApplication(pid), kAXFocusedUIElementAttribute),
+                  let role = attribute(focused, kAXRoleAttribute) as? String else { return nil }
+            // A window or generic container cannot distinguish its input fields.
+            guard ["AXTextField", "AXTextArea", "AXComboBox"].contains(role)
+                || (role == "AXGroup" && attribute(focused, kAXIsEditableAttribute) as? Bool == true) else { return nil }
+            var owner: pid_t = 0
+            guard AXUIElementGetPid(focused, &owner) == .success, owner == pid else { return nil }
+            return InputTarget(element: focused, pid: pid)
         }
-        _ = AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        guard !Task.isCancelled, ProcessInfo.processInfo.systemUptime < deadline else { return nil }
+        return result
     }
 
-    func isFocused() -> Bool {
+    func hasExactFocus() async -> Bool {
+        guard let current = await Self.focusedSnapshot(for: pid), !Task.isCancelled else { return false }
+        return CFEqual(current.element, element)
+    }
+
+    func focus() async {
+        await Self.perform(until: ProcessInfo.processInfo.systemUptime + 0.25) {
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+                  !focusedOnWorker(), Self.prepare(element) else { return }
+            _ = AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        }
+    }
+
+    func isFocused() async -> Bool {
+        await Self.perform(until: ProcessInfo.processInfo.systemUptime + 0.2) { focusedOnWorker() }
+    }
+
+    private func focusedOnWorker() -> Bool {
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return false }
         if Self.attribute(element, kAXFocusedAttribute) as? Bool == true { return true }
         guard let focused = Self.attribute(AXUIElementCreateApplication(pid), kAXFocusedUIElementAttribute),
@@ -292,12 +431,12 @@ import OSLog
 
     private static func isSettable(_ element: AXUIElement, _ name: String) -> Bool {
         var result: DarwinBoolean = false
-        return AXUIElementIsAttributeSettable(element, name as CFString, &result) == .success && result.boolValue
+        return prepare(element) && AXUIElementIsAttributeSettable(element, name as CFString, &result) == .success && result.boolValue
     }
 
     private static func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
         var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
+        guard prepare(element), AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
         return value
     }
 }

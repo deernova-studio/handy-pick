@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '新版本号，例如 0.4.30（不要填 v）'
+        description: '新版本号，例如 0.4.35（不要填 v）'
         type: string
         required: true
-        default: '0.4.30'
+        default: '0.4.35'
       build_number:
-        description: '新构建号，例如 52'
+        description: '新构建号，例如 57'
         type: string
         required: true
-        default: '52'
+        default: '57'
       notes:
         description: '本次功能更新或问题修复（可选）'
         type: string
@@ -60,12 +60,12 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 75
     outputs:
       artifact_id: ${{ steps.artifact.outputs.artifact-id }}
     env:
-      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -83,7 +83,7 @@ jobs:
           .cache/one/bin/one mise install
       - name: 检查 One 任务配置是否同步
         run: one init mise --dry-run -o json | python3 -c 'import json,sys; p=json.load(sys.stdin); sys.exit("Run one init mise and commit mise.toml" if p["changes"] else 0)'
-      - name: 测试与编译
+      - name: 构建与打包冒烟
         run: one run handy-pick:check --ui stream
       - name: 从 One 的共享凭据库获取签名材料
         uses: Infisical/secrets-action@8a06c1bdcd5b8635d510c52d4b57a92c1ccef785 # v1.0.9

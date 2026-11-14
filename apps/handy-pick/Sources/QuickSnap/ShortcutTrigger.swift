@@ -6,6 +6,8 @@ import QuickSnapCore
 final class ShortcutTrigger {
     static let syntheticEventTag: Int64 = 0x51534E4150
     var binding: ShortcutBinding = .mouse(2)
+    var pasteBinding: ShortcutBinding?
+    var onPaste: ((ClickRecognizer.Gesture) -> Void)?
     var mode: ShortcutMode = .doublePress
     var onAction: ((ClickRecognizer.Gesture) -> Void)?
     var onRecorded: ((ShortcutBinding?) -> Void)?
@@ -126,6 +128,19 @@ final class ShortcutTrigger {
         if type == .keyUp { return keyGate.up(code: code) == .consume }
         if type == .keyDown, let held = keyGate.heldResult(code: code) { return held == .consume }
         guard active, !suspended, mode.accepts(binding) else { return false }
+        if mode == .chord, let pasteBinding, pasteBinding != binding,
+           type == .keyDown, pasteBinding.matchesKey(code, flags: flags),
+           event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
+            let result = keyGate.down(binding: pasteBinding, code: code, flags: flags, repeating: false, allowShortcut: true)
+            if result == .press {
+                let token = generation, target = frontmostPID
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.running, !self.recording, !self.suspended, self.generation == token else { return }
+                    self.onPaste?(ClickRecognizer.Gesture(target: target, point: .zero))
+                }
+            }
+            return result != .pass
+        }
         switch binding {
         case .mouse(let selected):
             guard [.otherMouseDown, .otherMouseUp, .otherMouseDragged].contains(type),
@@ -161,7 +176,7 @@ final class ShortcutTrigger {
             }
             let mouse = NSEvent.mouseLocation
             let location = keyboard ? CGPoint(x: mouse.x, y: (NSScreen.screens.first?.frame.maxY ?? 0)-mouse.y) : gesture.point
-            self.onAction?(ClickRecognizer.Gesture(target: gesture.target, point: location))
+            self.onAction?(ClickRecognizer.Gesture(target: gesture.target, point: location, keyboard: keyboard))
         }
     }
 

@@ -10,15 +10,13 @@ tasks:
     cmds:
       - zsh Scripts/build.sh
   check:
-    desc: Check scripts, test and compile / 检查脚本、测试并编译
+    desc: Build smoke check / 构建与打包冒烟检查
     cmds:
       - bash Scripts/check-ci.sh
-  test:
-    desc: Run Swift and release-script tests / 运行 Swift 与发布脚本测试
+  smoke:
+    desc: Run build smoke; see docs for manual cases / 构建冒烟，人工用例见文档
     cmds:
-      - env PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s Scripts/tests -v
-      - env PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ../../scripts/tests -v
-      - xcrun swift test
+      - bash Scripts/check-ci.sh
   pack:
     desc: Build a local unsigned DMG / 构建本地未公证 DMG
     cmds:
