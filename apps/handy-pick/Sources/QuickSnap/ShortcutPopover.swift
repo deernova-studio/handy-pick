@@ -3,8 +3,7 @@ import ImageIO
 import QuickSnapCore
 
 final class ShortcutPopover: NSViewController {
-    var onRecordPaste: (() -> Void)?
-    var onRecord: (() -> Void)?
+    var onRecord: ((ShortcutAction) -> Void)?
     var onPermission: (() -> Void)?
     var onSelect: ((UUID) -> Void)?
     var onRemove: ((UUID) -> Void)?
@@ -18,12 +17,8 @@ final class ShortcutPopover: NSViewController {
     private var selectedType = 0
     private let scroll = NSScrollView()
     private let separator = PaperlightSurface()
-    private var chordMode = false
-    private var recordingPaste = false
-    private let copyLabel = NSTextField(labelWithString: "复制 / 截图")
-    private let pasteLabel = NSTextField(labelWithString: "粘贴")
-    private let pasteButton = NSButton(title: "", target: nil, action: nil)
-    private let bindingButton = NSButton(title: "", target: nil, action: nil)
+    private var recordingAction: ShortcutAction?
+    private let recordingButtons = ShortcutAction.allCases.map { _ in NSButton(title: "", target: nil, action: nil) }
     private let modeButton = NSPopUpButton(frame: .zero, pullsDown: true)
     private let grid = FlippedHistoryView()
     private var needsPermission = false
@@ -40,20 +35,26 @@ final class ShortcutPopover: NSViewController {
         modeButton.target = self; modeButton.action = #selector(selectTriggerMode)
         modeButton.setAccessibilityLabel("触发方式")
         root.addSubview(modeButton)
-        bindingButton.frame = NSRect(x: 184, y: 16, width: 160, height: 24)
-        bindingButton.target = self; bindingButton.action = #selector(record)
-        bindingButton.font = Paperlight.label
-        bindingButton.controlSize = .regular; bindingButton.isBordered = true
-        bindingButton.bezelStyle = .rounded
-        bindingButton.setAccessibilityLabel("录入快捷键")
-        bindingButton.toolTip = "点击后按新键，Esc 取消"
-        root.addSubview(bindingButton)
-        pasteButton.bezelStyle = .rounded; pasteButton.controlSize = .regular
-        pasteButton.font = Paperlight.label; pasteButton.target = self; pasteButton.action = #selector(recordPaste)
-        pasteButton.setAccessibilityLabel("录入粘贴快捷键")
-        pasteButton.toolTip = "直接粘贴到当前焦点；允许与复制快捷键相同"
-        for label in [copyLabel, pasteLabel] { label.font = Paperlight.body; label.textColor = Paperlight.secondary; root.addSubview(label) }
-        root.addSubview(pasteButton)
+        for action in ShortcutAction.allCases {
+            let y = 56 + CGFloat(action.rawValue) * 36
+            let label = NSTextField(labelWithString: action.title)
+            label.font = Paperlight.body
+            label.textColor = Paperlight.secondary
+            label.frame = NSRect(x: 16, y: y + 1, width: 116, height: 24)
+            root.addSubview(label)
+
+            let button = recordingButtons[action.rawValue]
+            button.target = self
+            button.action = #selector(record(_:))
+            button.tag = action.rawValue
+            button.font = Paperlight.label
+            button.controlSize = .regular
+            button.isBordered = true
+            button.bezelStyle = .rounded
+            button.frame = button.frame(forAlignmentRect: NSRect(x: 144, y: y, width: 200, height: 24))
+            button.setAccessibilityLabel("录入\(action.title)快捷键")
+            root.addSubview(button)
+        }
         separator.frame = NSRect(x: 16, y: 55, width: 328, height: Paperlight.hairline(root))
         separator.fill = Paperlight.line; root.addSubview(separator)
         scroll.frame = NSRect(x: 16, y: 64, width: 328, height: 312)
@@ -109,18 +110,21 @@ final class ShortcutPopover: NSViewController {
         return image
     }
 
-    func update(binding: String, recording: Bool, needsPermission: Bool, mode: ShortcutMode = .doublePress, pasteBinding: String = "", recordingPaste: Bool = false) {
-        loadViewIfNeeded(); self.needsPermission = needsPermission
-        let modeChanged = chordMode != (mode == .chord)
-        chordMode = mode == .chord; self.recordingPaste = recordingPaste
+    func update(bindings: [ShortcutAction: ShortcutBinding], recording: ShortcutAction?, needsPermission: Bool, mode: ShortcutMode) {
+        loadViewIfNeeded()
+        self.needsPermission = needsPermission
+        recordingAction = recording
+        let prompt = mode == .chord ? "请按组合键…" : "请按新键…"
+        let hint = mode == .chord ? "按住修饰键，再按主键。按 Esc 取消。" : "录入后双击触发。按 Esc 取消。"
         modeButton.item(at: 0)?.title = mode == .doublePress ? "双击" : "组合键"
         modeButton.selectItem(at: mode == .doublePress ? 1 : 2)
         modeButton.item(at: 1)?.state = mode == .doublePress ? .on : .off
         modeButton.item(at: 2)?.state = mode == .chord ? .on : .off
-        bindingButton.title = needsPermission ? "授权…" : (recording && !recordingPaste ? (mode == .chord ? "请按组合键…" : "请按新键…") : binding)
-        pasteButton.title = needsPermission ? "授权…" : (recording && recordingPaste ? "请按组合键…" : pasteBinding)
-        if modeChanged { renderHistory() }
-        bindingButton.toolTip = mode == .chord ? "按住 ⌘、⌃、⌥ 或 ⇧ 再按一个键；一次触发，输入框内也生效；Esc 取消" : "点击后按新键，双击触发；Esc 取消"
+        for action in ShortcutAction.allCases {
+            let button = recordingButtons[action.rawValue]
+            button.title = needsPermission ? "授权…" : (recording == action ? prompt : bindings[action]?.displayName ?? "录入…")
+            button.toolTip = hint
+        }
     }
     func updateHistory(_ entries: [ClipboardHistory.Entry]) {
         loadViewIfNeeded()
@@ -149,7 +153,7 @@ final class ShortcutPopover: NSViewController {
         let contentHeight = max(0, CGFloat(rows) * 120 - 8)
         let visibleHeight = max(0, CGFloat(min(rows, 3)) * 120 - 8)
         let previousOrigin = scroll.contentView.bounds.origin
-        let top: CGFloat = chordMode ? 136 : 64
+        let top: CGFloat = 172
         scroll.frame = NSRect(x: 16, y: top, width: 328, height: visibleHeight)
         grid.frame = NSRect(x: 0, y: 0, width: 328, height: contentHeight)
         scroll.hasVerticalScroller = rows > 3
@@ -159,16 +163,11 @@ final class ShortcutPopover: NSViewController {
         separator.isHidden = entries.isEmpty
         typeFilter.isHidden = history.isEmpty
         filterDivider.isHidden = history.isEmpty
-        let size = NSSize(width: chordMode || !entries.isEmpty ? 360 : 240, height: entries.isEmpty ? (chordMode ? 128 : 56) : top + visibleHeight + 16)
+        let size = NSSize(width: 360, height: entries.isEmpty ? top - 8 : top + visibleHeight + 16)
         separator.frame.origin.y = top - 9
-        copyLabel.isHidden = !chordMode; pasteLabel.isHidden = !chordMode; pasteButton.isHidden = !chordMode
-        copyLabel.frame = NSRect(x: 16, y: 57, width: 116, height: 24)
-        pasteLabel.frame = NSRect(x: 16, y: 93, width: 116, height: 24)
-        pasteButton.frame = pasteButton.frame(forAlignmentRect: NSRect(x: 144, y: 92, width: 200, height: 24))
         // AppKit bezel/shadow insets differ by control type and OS version.
         // Align visible control rectangles instead of assigning equal outer frames.
         modeButton.frame = modeButton.frame(forAlignmentRect: NSRect(x: 16, y: 16, width: 80, height: 24))
-        bindingButton.frame = bindingButton.frame(forAlignmentRect: NSRect(x: chordMode ? 144 : 104, y: chordMode ? 56 : 16, width: chordMode ? 200 : 120, height: 24))
         typeFilter.frame = typeFilter.frame(forAlignmentRect: NSRect(x: 240, y: 16, width: 104, height: 24))
         if preferredContentSize != size {
             preferredContentSize = size
@@ -186,10 +185,17 @@ final class ShortcutPopover: NSViewController {
             grid.addSubview(tile)
         }
     }
-    func showRecordingHint(_ text: String) { (recordingPaste ? pasteButton : bindingButton).title = text }
-    @objc private func recordPaste() { if needsPermission { onPermission?() } else { onRecordPaste?() } }
+    func showRecordingHint(_ text: String) {
+        if let action = recordingAction { recordingButtons[action.rawValue].title = text }
+    }
     @objc private func clearHistory() { onClear?() }
-    @objc private func record() { if needsPermission { onPermission?() } else { onRecord?() } }
+    @objc private func record(_ sender: NSButton) {
+        if needsPermission {
+            onPermission?()
+        } else if let action = ShortcutAction(rawValue: sender.tag) {
+            onRecord?(action)
+        }
+    }
     @objc private func selectTriggerMode() { onModeChange?(modeButton.indexOfSelectedItem == 2 ? .chord : .doublePress) }
 }
 

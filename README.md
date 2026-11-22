@@ -10,17 +10,13 @@ A lightweight macOS menu bar app that keeps everyday actions close at hand.
 
 [Download for Mac](https://github.com/deernova-studio/handy-pick/releases/latest) · macOS 14+ · Apple Silicon
 
-## One gesture, three handy actions
+## Shortcuts for copy, paste and capture
 
-Double-click the middle mouse button:
+- Double-click the middle mouse button to copy in the active app.
+- Hold Control and Option and press V twice to paste.
+- Hold Control and Option and press S twice to start a screenshot.
 
-| Where you point | What happens |
-| --- | --- |
-| Selected text | Copy the selection |
-| A supported input field | Paste your clipboard |
-| Elsewhere | Capture part of your screen |
-
-Prefer a keyboard shortcut? Set your own from the menu bar.
+Set your own shortcuts or switch to single-press key combinations in the menu bar.
 
 ## Small app, useful extras
 

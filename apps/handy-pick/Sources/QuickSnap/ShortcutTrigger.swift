@@ -5,14 +5,16 @@ import QuickSnapCore
 /// Only key codes and modifier flags are inspected; typed text is never read or logged.
 final class ShortcutTrigger {
     static let syntheticEventTag: Int64 = 0x51534E4150
-    var binding: ShortcutBinding = .mouse(2)
-    var pasteBinding: ShortcutBinding?
-    var onPaste: ((ClickRecognizer.Gesture) -> Void)?
+    var bindings: [ShortcutAction: ShortcutBinding] = [:]
     var mode: ShortcutMode = .doublePress
-    var onAction: ((ClickRecognizer.Gesture) -> Void)?
+    var onAction: ((ShortcutAction, pid_t) -> Void)?
     var onRecorded: ((ShortcutBinding?) -> Void)?
     var onRecordingHint: ((String) -> Void)?
-    var suspended = false
+    var suspended = false {
+        didSet {
+            if suspended { recognizer.cancel(); mouseOrigin = nil; modifierCandidate = nil }
+        }
+    }
     private(set) var recording = false
     private var active = false
     private var tap: CFMachPort?
@@ -21,10 +23,12 @@ final class ShortcutTrigger {
     private var activationObserver: NSObjectProtocol?
     private var frontmostPID: Int32 = 0
     private var recognizer = ShortcutRecognizer(interval: NSEvent.doubleClickInterval)
-    private var origin: CGPoint?
+    private var gestureBinding: ShortcutBinding?
+    private var mouseOrigin: (button: Int64, point: CGPoint)?
     private var keyGate = KeyPressGate()
     private var heldModifiers: Set<UInt16> = []
     private var modifierCandidate: UInt16?
+    private var excludedBindings: [ShortcutBinding] = []
     private var generation = 0
 
     var running: Bool { active && tap != nil }
@@ -38,9 +42,15 @@ final class ShortcutTrigger {
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] note in
-            self?.frontmostPID = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier ?? 0
+            guard let self else { return }
+            let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier ?? 0
+            if pid != self.frontmostPID { self.recognizer.cancel() }
+            self.frontmostPID = pid
         }
-        let types: [CGEventType] = [.otherMouseDown, .otherMouseUp, .otherMouseDragged, .keyDown, .keyUp, .flagsChanged]
+        let types: [CGEventType] = [
+            .leftMouseDown, .rightMouseDown, .otherMouseDown, .otherMouseUp, .otherMouseDragged,
+            .keyDown, .keyUp, .flagsChanged
+        ]
         let mask = types.reduce(CGEventMask(0)) { $0 | (1 << $1.rawValue) }
         guard let port = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
                 options: .defaultTap, eventsOfInterest: mask, callback: { _, type, event, refcon in
@@ -64,45 +74,56 @@ final class ShortcutTrigger {
         return true
     }
 
-    func beginRecording() -> Bool {
-        recognizer.cancel(); modifierCandidate = nil; keyGate.reset(); heldModifiers.removeAll()
+    func beginRecording(excluding otherBindings: [ShortcutBinding]) -> Bool {
+        generation &+= 1
+        recognizer.cancel(); mouseOrigin = nil
+        modifierCandidate = nil; keyGate.reset(); heldModifiers.removeAll()
+        excludedBindings = otherBindings
         recording = true
         guard start(active: active) else { recording = false; return false }
         return true
     }
 
     func cancelRecording() {
-        recording = false; modifierCandidate = nil; recognizer.cancel()
+        recording = false; modifierCandidate = nil; excludedBindings.removeAll(); recognizer.cancel()
         if !active { stop() }
     }
 
     private func record(_ value: ShortcutBinding?) {
-        recording = false; modifierCandidate = nil; recognizer.cancel()
-        DispatchQueue.main.async { [weak self] in self?.onRecorded?(value) }
+        recording = false; modifierCandidate = nil; excludedBindings.removeAll(); recognizer.cancel()
+        let token = generation
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.generation == token else { return }
+            self.onRecorded?(value)
+        }
     }
 
     private func acceptRecordedBinding(_ value: ShortcutBinding) {
-        if mode.accepts(value) { record(value) }
-        else {
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.recording else { return }
-                self.onRecordingHint?("请按修饰键 + 主键")
-            }
+        let hint: String
+        if excludedBindings.contains(value) {
+            hint = "快捷键重复，请换一个"
+        } else if !mode.accepts(value) {
+            hint = mode == .chord ? "请按修饰键 + 主键" : "请换一个按键"
+        } else {
+            record(value)
+            return
+        }
+        let token = generation
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.recording, self.generation == token else { return }
+            self.onRecordingHint?(hint)
         }
     }
 
     private func process(_ type: CGEventType, _ event: CGEvent) -> Bool {
-        // Our own ⌘V must pass through even when ⌘V is the configured double-press shortcut.
+        // Generated copy and paste events must never trigger another HandyPick shortcut.
         if event.getIntegerValueField(.eventSourceUserData) == Self.syntheticEventTag { return false }
         let code = UInt16(clamping: event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags.rawValue
-        var modifierDown = false
-        if type == .flagsChanged {
-            if code == 57 { modifierDown = true } // Caps Lock generates one flag transition per press.
-            else if heldModifiers.contains(code) { heldModifiers.remove(code) }
-            else if Self.modifierFlag(code).map({ event.flags.contains($0) }) == true {
-                heldModifiers.insert(code); modifierDown = true
-            }
+        let modifier = type == .flagsChanged ? completedModifierPress(code, flags: event.flags) : nil
+        if [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown].contains(type) {
+            modifierCandidate = nil
+            if case .modifier = gestureBinding { recognizer.cancel() }
         }
         if recording {
             if type == .otherMouseDown {
@@ -115,11 +136,8 @@ final class ShortcutTrigger {
                 let value = ShortcutBinding.key(code, flags & ShortcutBinding.modifierMask)
                 acceptRecordedBinding(value)
                 return true
-            } else if type == .flagsChanged, ShortcutBinding.isModifier(code) {
-                if mode == .doublePress {
-                    if modifierDown { modifierCandidate = code; if code == 57 { record(.modifier(code)) } }
-                    else if modifierCandidate == code { record(.modifier(code)) }
-                }
+            } else if let modifier, mode == .doublePress {
+                acceptRecordedBinding(modifier)
                 // Modifier state continues to flow to the OS so it can never become stuck.
             }
             return false
@@ -127,56 +145,76 @@ final class ShortcutTrigger {
         // Pair releases even while the screenshot overlay temporarily suspends shortcuts.
         if type == .keyUp { return keyGate.up(code: code) == .consume }
         if type == .keyDown, let held = keyGate.heldResult(code: code) { return held == .consume }
-        guard active, !suspended, mode.accepts(binding) else { return false }
-        if mode == .chord, let pasteBinding, pasteBinding != binding,
-           type == .keyDown, pasteBinding.matchesKey(code, flags: flags),
-           event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
-            let result = keyGate.down(binding: pasteBinding, code: code, flags: flags, repeating: false, allowShortcut: true)
-            if result == .press {
-                let token = generation, target = frontmostPID
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, self.running, !self.recording, !self.suspended, self.generation == token else { return }
-                    self.onPaste?(ClickRecognizer.Gesture(target: target, point: .zero))
+        guard active, !suspended else { return false }
+        let pressedBinding: ShortcutBinding
+        switch type {
+        case .otherMouseDown, .otherMouseUp, .otherMouseDragged:
+            pressedBinding = .mouse(event.getIntegerValueField(.mouseEventButtonNumber))
+        case .keyDown:
+            guard event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else { return false }
+            pressedBinding = .key(code, flags & ShortcutBinding.modifierMask)
+        case .flagsChanged:
+            guard let modifier else { return false }
+            pressedBinding = modifier
+        default:
+            return false
+        }
+        guard let action = bindings.first(where: { $0.value == pressedBinding })?.key,
+              mode.accepts(pressedBinding) else { return false }
+        switch pressedBinding {
+        case .mouse(let selected):
+            if type == .otherMouseDown {
+                mouseOrigin = (selected, event.location)
+                press(pressedBinding, action: action, at: event.location)
+            } else if let origin = mouseOrigin, origin.button == selected {
+                if type == .otherMouseUp {
+                    mouseOrigin = nil
+                } else if gestureBinding == pressedBinding,
+                          hypot(event.location.x - origin.point.x, event.location.y - origin.point.y) > 6 {
+                    recognizer.cancel()
                 }
             }
-            return result != .pass
-        }
-        switch binding {
-        case .mouse(let selected):
-            guard [.otherMouseDown, .otherMouseUp, .otherMouseDragged].contains(type),
-                  event.getIntegerValueField(.mouseEventButtonNumber) == selected else { return false }
-            if type == .otherMouseDown { origin = event.location; press(at: event.location, keyboard: false) }
-            else if type == .otherMouseDragged, let origin,
-                    hypot(event.location.x-origin.x, event.location.y-origin.y) > 6 { recognizer.cancel() }
-            else if type == .otherMouseUp { origin = nil }
             return true
         case .key:
-            guard type == .keyDown, binding.matchesKey(code, flags: flags),
-                  event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else { return false }
-            let allowShortcut = mode.allowsActivation(for: binding, focusAllowsShortcut: TypingFocus.allowsShortcut(for: frontmostPID))
+            let allowShortcut = mode.allowsActivation(for: pressedBinding, focusAllowsShortcut: TypingFocus.allowsShortcut(for: frontmostPID))
             if !allowShortcut { recognizer.cancel() }
-            let result = keyGate.down(binding: binding, code: code, flags: flags,
-                                      repeating: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
-                                      allowShortcut: allowShortcut)
-            if result == .press { press(at: .zero, keyboard: true) }
+            let result = keyGate.down(binding: pressedBinding, code: code, flags: flags, repeating: false, allowShortcut: allowShortcut)
+            if result == .press { press(pressedBinding, action: action, at: .zero) }
             return result != .pass
-        case .modifier(let selected):
-            if type == .flagsChanged, code == selected, modifierDown { press(at: .zero, keyboard: true) }
+        case .modifier:
+            press(pressedBinding, action: action, at: .zero)
             return false
         }
     }
 
-    private func press(at point: CGPoint, keyboard: Bool) {
+    private func completedModifierPress(_ code: UInt16, flags: CGEventFlags) -> ShortcutBinding? {
+        if code == 57 { return .modifier(code) } // Caps Lock emits one transition per press.
+        if heldModifiers.remove(code) != nil {
+            guard modifierCandidate == code else { return nil }
+            modifierCandidate = nil
+            return .modifier(code)
+        }
+        guard Self.modifierFlag(code).map({ flags.contains($0) }) == true else { return nil }
+        heldModifiers.insert(code)
+        // Count a modifier on release only when it was tapped by itself.
+        if recording || (active && !suspended) {
+            modifierCandidate = heldModifiers.count == 1 ? code : nil
+        }
+        return nil
+    }
+
+    private func press(_ pressedBinding: ShortcutBinding, action: ShortcutAction, at point: CGPoint) {
+        if gestureBinding != pressedBinding {
+            recognizer.cancel()
+            gestureBinding = pressedBinding
+        }
         guard let gesture = recognizer.press(mode: mode, at: ProcessInfo.processInfo.systemUptime, point: point, target: frontmostPID) else { return }
         let token = generation
         DispatchQueue.main.async { [weak self] in
             guard let self, self.running, !self.recording, !self.suspended, self.generation == token else { return }
-            if keyboard, !self.mode.allowsActivation(for: self.binding, focusAllowsShortcut: TypingFocus.allowsShortcut(for: gesture.target)) {
-                self.recognizer.cancel(); return
-            }
-            let mouse = NSEvent.mouseLocation
-            let location = keyboard ? CGPoint(x: mouse.x, y: (NSScreen.screens.first?.frame.maxY ?? 0)-mouse.y) : gesture.point
-            self.onAction?(ClickRecognizer.Gesture(target: gesture.target, point: location, keyboard: keyboard))
+            guard self.mode.allowsActivation(for: pressedBinding,
+                focusAllowsShortcut: TypingFocus.allowsShortcut(for: gesture.target)) else { return }
+            self.onAction?(action, gesture.target)
         }
     }
 
@@ -193,7 +231,8 @@ final class ShortcutTrigger {
 
     func stop() {
         generation &+= 1; active = false; recording = false; suspended = false
-        recognizer.cancel(); keyGate.reset(); heldModifiers.removeAll(); origin = nil
+        recognizer.cancel(); gestureBinding = nil; mouseOrigin = nil
+        keyGate.reset(); heldModifiers.removeAll(); modifierCandidate = nil; excludedBindings.removeAll()
         if let observer = activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
         activationObserver = nil
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }; localMonitor = nil

@@ -11,8 +11,7 @@ public struct ClickRecognizer {
     public struct Gesture: Equatable {
         public let target: Int32
         public let point: CGPoint
-        public let keyboard: Bool
-        public init(target: Int32, point: CGPoint, keyboard: Bool = false) { self.target = target; self.point = point; self.keyboard = keyboard }
+        public init(target: Int32, point: CGPoint) { self.target = target; self.point = point }
     }
     public let interval: TimeInterval
     public let tolerance: CGFloat
