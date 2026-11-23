@@ -16,7 +16,7 @@ A lightweight macOS menu bar app that keeps everyday actions close at hand.
 - Hold Control and Option and press V twice to paste.
 - Hold Control and Option and press S twice to start a screenshot.
 
-Set your own shortcuts or switch to single-press key combinations in the menu bar.
+Open the menu bar panel and click the gear to customize shortcuts or switch to single-press key combinations. Actions can share a shortcut and use the pointer context to choose between them.
 
 ## Small app, useful extras
 

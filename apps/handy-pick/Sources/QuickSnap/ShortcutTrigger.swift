@@ -4,10 +4,15 @@ import QuickSnapCore
 
 /// Only key codes and modifier flags are inspected; typed text is never read or logged.
 final class ShortcutTrigger {
+    enum Interruption {
+        case input
+        case applicationChange
+    }
     static let syntheticEventTag: Int64 = 0x51534E4150
     var bindings: [ShortcutAction: ShortcutBinding] = [:]
     var mode: ShortcutMode = .doublePress
-    var onAction: ((ShortcutAction, pid_t) -> Void)?
+    var onAction: ((Set<ShortcutAction>, pid_t, CGPoint) -> Void)?
+    var onInteractionWhileSuspended: ((Interruption) -> Void)?
     var onRecorded: ((ShortcutBinding?) -> Void)?
     var onRecordingHint: ((String) -> Void)?
     var suspended = false {
@@ -28,7 +33,6 @@ final class ShortcutTrigger {
     private var keyGate = KeyPressGate()
     private var heldModifiers: Set<UInt16> = []
     private var modifierCandidate: UInt16?
-    private var excludedBindings: [ShortcutBinding] = []
     private var generation = 0
 
     var running: Bool { active && tap != nil }
@@ -44,7 +48,10 @@ final class ShortcutTrigger {
         ) { [weak self] note in
             guard let self else { return }
             let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier ?? 0
-            if pid != self.frontmostPID { self.recognizer.cancel() }
+            if pid != self.frontmostPID {
+                self.recognizer.cancel()
+                if self.suspended { self.onInteractionWhileSuspended?(.applicationChange) }
+            }
             self.frontmostPID = pid
         }
         let types: [CGEventType] = [
@@ -74,23 +81,23 @@ final class ShortcutTrigger {
         return true
     }
 
-    func beginRecording(excluding otherBindings: [ShortcutBinding]) -> Bool {
+    func beginRecording() -> Bool {
         generation &+= 1
         recognizer.cancel(); mouseOrigin = nil
         modifierCandidate = nil; keyGate.reset(); heldModifiers.removeAll()
-        excludedBindings = otherBindings
         recording = true
         guard start(active: active) else { recording = false; return false }
         return true
     }
 
     func cancelRecording() {
-        recording = false; modifierCandidate = nil; excludedBindings.removeAll(); recognizer.cancel()
+        generation &+= 1
+        recording = false; modifierCandidate = nil; recognizer.cancel()
         if !active { stop() }
     }
 
     private func record(_ value: ShortcutBinding?) {
-        recording = false; modifierCandidate = nil; excludedBindings.removeAll(); recognizer.cancel()
+        recording = false; modifierCandidate = nil; recognizer.cancel()
         let token = generation
         DispatchQueue.main.async { [weak self] in
             guard let self, self.generation == token else { return }
@@ -99,15 +106,11 @@ final class ShortcutTrigger {
     }
 
     private func acceptRecordedBinding(_ value: ShortcutBinding) {
-        let hint: String
-        if excludedBindings.contains(value) {
-            hint = "快捷键重复，请换一个"
-        } else if !mode.accepts(value) {
-            hint = mode == .chord ? "请按修饰键 + 主键" : "请换一个按键"
-        } else {
+        if mode.accepts(value) {
             record(value)
             return
         }
+        let hint = mode == .chord ? "请按修饰键 + 主键" : "请换一个按键"
         let token = generation
         DispatchQueue.main.async { [weak self] in
             guard let self, self.recording, self.generation == token else { return }
@@ -124,6 +127,9 @@ final class ShortcutTrigger {
         if [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown].contains(type) {
             modifierCandidate = nil
             if case .modifier = gestureBinding { recognizer.cancel() }
+            if suspended, type != .keyDown || keyGate.heldResult(code: code) == nil {
+                onInteractionWhileSuspended?(.input)
+            }
         }
         if recording {
             if type == .otherMouseDown {
@@ -159,13 +165,14 @@ final class ShortcutTrigger {
         default:
             return false
         }
-        guard let action = bindings.first(where: { $0.value == pressedBinding })?.key,
+        let actions = Set(bindings.compactMap { $0.value == pressedBinding ? $0.key : nil })
+        guard !actions.isEmpty,
               mode.accepts(pressedBinding) else { return false }
         switch pressedBinding {
         case .mouse(let selected):
             if type == .otherMouseDown {
                 mouseOrigin = (selected, event.location)
-                press(pressedBinding, action: action, at: event.location)
+                press(pressedBinding, actions: actions, at: event.location)
             } else if let origin = mouseOrigin, origin.button == selected {
                 if type == .otherMouseUp {
                     mouseOrigin = nil
@@ -179,10 +186,10 @@ final class ShortcutTrigger {
             let allowShortcut = mode.allowsActivation(for: pressedBinding, focusAllowsShortcut: TypingFocus.allowsShortcut(for: frontmostPID))
             if !allowShortcut { recognizer.cancel() }
             let result = keyGate.down(binding: pressedBinding, code: code, flags: flags, repeating: false, allowShortcut: allowShortcut)
-            if result == .press { press(pressedBinding, action: action, at: .zero) }
+            if result == .press { press(pressedBinding, actions: actions, at: .zero) }
             return result != .pass
         case .modifier:
-            press(pressedBinding, action: action, at: .zero)
+            press(pressedBinding, actions: actions, at: .zero)
             return false
         }
     }
@@ -203,18 +210,21 @@ final class ShortcutTrigger {
         return nil
     }
 
-    private func press(_ pressedBinding: ShortcutBinding, action: ShortcutAction, at point: CGPoint) {
+    private func press(_ pressedBinding: ShortcutBinding, actions: Set<ShortcutAction>, at point: CGPoint) {
         if gestureBinding != pressedBinding {
             recognizer.cancel()
             gestureBinding = pressedBinding
         }
         guard let gesture = recognizer.press(mode: mode, at: ProcessInfo.processInfo.systemUptime, point: point, target: frontmostPID) else { return }
+        let pointer: CGPoint
+        if case .mouse = pressedBinding { pointer = gesture.point }
+        else { pointer = CGEvent(source: nil)?.location ?? gesture.point }
         let token = generation
         DispatchQueue.main.async { [weak self] in
             guard let self, self.running, !self.recording, !self.suspended, self.generation == token else { return }
             guard self.mode.allowsActivation(for: pressedBinding,
                 focusAllowsShortcut: TypingFocus.allowsShortcut(for: gesture.target)) else { return }
-            self.onAction?(action, gesture.target)
+            self.onAction?(actions, gesture.target, pointer)
         }
     }
 
@@ -232,7 +242,7 @@ final class ShortcutTrigger {
     func stop() {
         generation &+= 1; active = false; recording = false; suspended = false
         recognizer.cancel(); gestureBinding = nil; mouseOrigin = nil
-        keyGate.reset(); heldModifiers.removeAll(); modifierCandidate = nil; excludedBindings.removeAll()
+        keyGate.reset(); heldModifiers.removeAll(); modifierCandidate = nil
         if let observer = activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
         activationObserver = nil
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }; localMonitor = nil

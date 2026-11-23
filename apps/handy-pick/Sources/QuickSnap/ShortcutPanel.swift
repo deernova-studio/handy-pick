@@ -2,18 +2,19 @@ import AppKit
 
 /// A nonactivating panel keeps the current app as the shortcut's target.
 final class ShortcutPanel: NSPanel {
-    var onDismiss: (() -> Void)?
     var isRecording: (() -> Bool)?
     private var anchorRect = NSRect.zero
     private var anchorVisibleFrame: NSRect?
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var activationObserver: NSObjectProtocol?
+    private let editor: ShortcutPopover
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
-    init(editor: NSViewController) {
+    init(editor: ShortcutPopover) {
+        self.editor = editor
         super.init(contentRect: NSRect(origin: .zero, size: editor.preferredContentSize),
                    styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         isReleasedWhenClosed = false
@@ -50,6 +51,7 @@ final class ShortcutPanel: NSPanel {
         let screen = window.screen ?? NSScreen.main
         let visible = screen?.visibleFrame ?? anchorRect
         anchorVisibleFrame = visible
+        editor.limitHeight(to: anchorRect.minY - visible.minY - 12)
         let x = min(max(anchorRect.midX - frame.width / 2, visible.minX + 6), visible.maxX - frame.width - 6)
         setFrameOrigin(NSPoint(x: x, y: anchorRect.minY - frame.height - 6))
         makeKeyAndOrderFront(nil)
@@ -60,7 +62,7 @@ final class ShortcutPanel: NSPanel {
         guard isVisible else { return }
         orderOut(nil)
         removeDismissalMonitors()
-        onDismiss?()
+        editor.setSettingsExpanded(false)
     }
 
     private func installDismissalMonitors() {

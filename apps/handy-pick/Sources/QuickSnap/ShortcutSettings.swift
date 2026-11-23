@@ -35,11 +35,8 @@ struct ShortcutSettings {
 
     func bindings(for mode: ShortcutMode) -> [ShortcutAction: ShortcutBinding] {
         var bindings: [ShortcutAction: ShortcutBinding] = [:]
-        // Prefer saved bindings. If an old pair was shared, keep it on Copy.
         for action in ShortcutAction.allCases {
-            if let binding = savedBinding(for: action, mode: mode), !bindings.values.contains(binding) {
-                bindings[action] = binding
-            }
+            bindings[action] = savedBinding(for: action, mode: mode)
         }
         let defaultChords = ShortcutAction.allCases.map { $0.defaultBinding(for: .chord) }
         for action in ShortcutAction.allCases where bindings[action] == nil {
@@ -50,10 +47,8 @@ struct ShortcutSettings {
     }
 
     func save(_ binding: ShortcutBinding, for action: ShortcutAction, mode: ShortcutMode) -> Bool {
+        guard mode.accepts(binding) else { return false }
         var bindings = bindings(for: mode)
-        guard mode.accepts(binding), !bindings.contains(where: { $0.key != action && $0.value == binding }) else {
-            return false
-        }
         bindings[action] = binding
         // Save the other resolved defaults too, so editing one row doesn't move another.
         for (action, value) in bindings {

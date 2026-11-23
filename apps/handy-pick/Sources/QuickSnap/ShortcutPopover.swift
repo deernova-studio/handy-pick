@@ -11,12 +11,18 @@ final class ShortcutPopover: NSViewController {
     var onPreview: ((UUID) -> Void)?
     var onModeChange: ((ShortcutMode) -> Void)?
     var onSizeChange: ((NSSize) -> Void)?
+    var onSettingsCollapsed: (() -> Void)?
+    private let historyLabel = NSTextField(labelWithString: "剪贴板")
     private let typeFilter = NSSegmentedControl()
-    private let filterDivider = PaperlightSurface()
+    private let settingsButton = PaperlightButton(title: "", target: nil, action: nil)
+    private let settings = PaperlightSurface()
+    private var settingsExpanded = false
+    private var availableHeight: CGFloat = .infinity
+    private let headerHeight: CGFloat = 48
+    private let settingsHeight: CGFloat = 152
     private var history: [ClipboardHistory.Entry] = []
     private var selectedType = 0
     private let scroll = NSScrollView()
-    private let separator = PaperlightSurface()
     private var recordingAction: ShortcutAction?
     private let recordingButtons = ShortcutAction.allCases.map { _ in NSButton(title: "", target: nil, action: nil) }
     private let modeButton = NSPopUpButton(frame: .zero, pullsDown: true)
@@ -24,8 +30,29 @@ final class ShortcutPopover: NSViewController {
     private var needsPermission = false
 
     override func loadView() {
-        let root = PaperlightSurface(frame: NSRect(x: 0, y: 0, width: 360, height: 392))
-        modeButton.frame = NSRect(x: 12, y: 14, width: 88, height: 28)
+        let root = PaperlightSurface(frame: NSRect(x: 0, y: 0, width: 360, height: headerHeight))
+        historyLabel.font = Paperlight.label
+        historyLabel.textColor = Paperlight.secondary
+        historyLabel.frame = NSRect(x: 16, y: 16, width: 180, height: 20)
+        root.addSubview(historyLabel)
+        settingsButton.frame = NSRect(x: 320, y: 12, width: 24, height: 24)
+        settingsButton.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "快捷键设置")
+        settingsButton.setButtonType(.pushOnPushOff)
+        settingsButton.setAccessibilityLabel("快捷键设置")
+        settingsButton.toolTip = "展开快捷键设置"
+        settingsButton.isBordered = false
+        settingsButton.target = self; settingsButton.action = #selector(toggleSettings)
+        root.addSubview(settingsButton)
+        settings.isHidden = true
+        root.addSubview(settings)
+        let divider = PaperlightSurface(frame: NSRect(x: 16, y: 0, width: 328, height: Paperlight.hairline(root)))
+        divider.fill = Paperlight.line
+        settings.addSubview(divider)
+        let modeLabel = NSTextField(labelWithString: "触发方式")
+        modeLabel.font = Paperlight.body
+        modeLabel.textColor = Paperlight.secondary
+        modeLabel.frame = NSRect(x: 16, y: 13, width: 116, height: 24)
+        settings.addSubview(modeLabel)
         // A pop-up aligns its selected row over the control. A pull-down opens
         // below it; its hidden first item supplies the current mode's title.
         modeButton.addItems(withTitles: ["触发方式", "双击", "组合键"])
@@ -34,14 +61,15 @@ final class ShortcutPopover: NSViewController {
         modeButton.font = Paperlight.label
         modeButton.target = self; modeButton.action = #selector(selectTriggerMode)
         modeButton.setAccessibilityLabel("触发方式")
-        root.addSubview(modeButton)
+        modeButton.frame = modeButton.frame(forAlignmentRect: NSRect(x: 144, y: 12, width: 200, height: 24))
+        settings.addSubview(modeButton)
         for action in ShortcutAction.allCases {
-            let y = 56 + CGFloat(action.rawValue) * 36
+            let y = 46 + CGFloat(action.rawValue) * 32
             let label = NSTextField(labelWithString: action.title)
             label.font = Paperlight.body
             label.textColor = Paperlight.secondary
             label.frame = NSRect(x: 16, y: y + 1, width: 116, height: 24)
-            root.addSubview(label)
+            settings.addSubview(label)
 
             let button = recordingButtons[action.rawValue]
             button.target = self
@@ -53,17 +81,11 @@ final class ShortcutPopover: NSViewController {
             button.bezelStyle = .rounded
             button.frame = button.frame(forAlignmentRect: NSRect(x: 144, y: y, width: 200, height: 24))
             button.setAccessibilityLabel("录入\(action.title)快捷键")
-            root.addSubview(button)
+            settings.addSubview(button)
         }
-        separator.frame = NSRect(x: 16, y: 55, width: 328, height: Paperlight.hairline(root))
-        separator.fill = Paperlight.line; root.addSubview(separator)
-        scroll.frame = NSRect(x: 16, y: 64, width: 328, height: 312)
         scroll.scrollerStyle = .overlay
         scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
         scroll.documentView = grid; root.addSubview(scroll)
-        typeFilter.frame = NSRect(x: 240, y: 16, width: 104, height: 24)
-        filterDivider.frame = NSRect(x: 232, y: 18, width: Paperlight.hairline(root), height: 20)
-        filterDivider.fill = Paperlight.line; root.addSubview(filterDivider)
         typeFilter.identifier = NSUserInterfaceItemIdentifier("historyTypeFilter")
         typeFilter.segmentCount = 3; typeFilter.trackingMode = .selectOne
         typeFilter.segmentStyle = .rounded; typeFilter.controlSize = .regular
@@ -76,12 +98,33 @@ final class ShortcutPopover: NSViewController {
             typeFilter.setWidth(28, forSegment: index)
             typeFilter.setToolTip(item.1, forSegment: index)
         }
+        typeFilter.frame = typeFilter.frame(forAlignmentRect: NSRect(x: 208, y: 12, width: 104, height: 24))
         root.addSubview(typeFilter)
         let menu = NSMenu()
         let clear = NSMenuItem(title: "清空记录", action: #selector(clearHistory), keyEquivalent: "")
         clear.target = self; menu.addItem(clear); root.menu = menu; grid.menu = menu
         view = root; preferredContentSize = root.frame.size
         updateHistory([])
+    }
+
+    @objc private func toggleSettings() { setSettingsExpanded(!settingsExpanded) }
+
+    func setSettingsExpanded(_ expanded: Bool) {
+        loadViewIfNeeded()
+        guard settingsExpanded != expanded else { return }
+        settingsExpanded = expanded
+        settingsButton.state = expanded ? .on : .off
+        settingsButton.toolTip = expanded ? "收起快捷键设置" : "展开快捷键设置"
+        if !expanded, let responder = view.window?.firstResponder as? NSView, responder.isDescendant(of: settings) {
+            view.window?.makeFirstResponder(settingsButton)
+        }
+        layoutSections()
+        if !expanded { onSettingsCollapsed?() }
+    }
+
+    func limitHeight(to height: CGFloat) {
+        availableHeight = height
+        layoutSections()
     }
 
     /// Freeze the symbol's geometry: the native segment still supplies its
@@ -129,6 +172,7 @@ final class ShortcutPopover: NSViewController {
     func updateHistory(_ entries: [ClipboardHistory.Entry]) {
         loadViewIfNeeded()
         history = entries
+        historyLabel.stringValue = entries.isEmpty ? "暂无剪贴板记录" : "剪贴板"
         let imageCount = entries.filter { if case .image = $0.content { return true }; return false }.count
         let counts = [entries.count, imageCount, entries.count-imageCount]
         if counts[selectedType] == 0 { selectedType = 0 }
@@ -151,29 +195,9 @@ final class ShortcutPopover: NSViewController {
         grid.subviews.forEach { $0.removeFromSuperview() }
         let rows = (entries.count + 2) / 3
         let contentHeight = max(0, CGFloat(rows) * 120 - 8)
-        let visibleHeight = max(0, CGFloat(min(rows, 3)) * 120 - 8)
-        let previousOrigin = scroll.contentView.bounds.origin
-        let top: CGFloat = 172
-        scroll.frame = NSRect(x: 16, y: top, width: 328, height: visibleHeight)
         grid.frame = NSRect(x: 0, y: 0, width: 328, height: contentHeight)
-        scroll.hasVerticalScroller = rows > 3
-        scroll.contentView.scroll(to: NSPoint(x: 0, y: min(max(0, previousOrigin.y), max(0, contentHeight-visibleHeight))))
-        scroll.reflectScrolledClipView(scroll.contentView)
-        scroll.isHidden = entries.isEmpty
-        separator.isHidden = entries.isEmpty
         typeFilter.isHidden = history.isEmpty
-        filterDivider.isHidden = history.isEmpty
-        let size = NSSize(width: 360, height: entries.isEmpty ? top - 8 : top + visibleHeight + 16)
-        separator.frame.origin.y = top - 9
-        // AppKit bezel/shadow insets differ by control type and OS version.
-        // Align visible control rectangles instead of assigning equal outer frames.
-        modeButton.frame = modeButton.frame(forAlignmentRect: NSRect(x: 16, y: 16, width: 80, height: 24))
-        typeFilter.frame = typeFilter.frame(forAlignmentRect: NSRect(x: 240, y: 16, width: 104, height: 24))
-        if preferredContentSize != size {
-            preferredContentSize = size
-            onSizeChange?(size)
-            view.setFrameSize(size)
-        }
+        layoutSections()
         for (index, entry) in entries.enumerated() {
             let tile = HistoryTile(entry: entry)
             let width: CGFloat = 104
@@ -183,6 +207,28 @@ final class ShortcutPopover: NSViewController {
             tile.onClear = { [weak self] in self?.onClear?() }
             tile.onPreview = { [weak self] in self?.onPreview?(entry.id) }
             grid.addSubview(tile)
+        }
+    }
+
+    private func layoutSections() {
+        let contentHeight = grid.frame.height
+        let settingsSpace = settingsExpanded ? settingsHeight : 0
+        let spacing: CGFloat = contentHeight > 0 ? 12 : 0
+        let viewport = min(contentHeight, 352, max(0, availableHeight - headerHeight - spacing - settingsSpace))
+        let previousY = scroll.contentView.bounds.origin.y
+        scroll.frame = NSRect(x: 16, y: headerHeight, width: 328, height: viewport)
+        scroll.hasVerticalScroller = contentHeight > viewport
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: min(previousY, max(0, contentHeight - viewport))))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        scroll.isHidden = viewport == 0
+        let historyBottom = headerHeight + viewport + spacing
+        settings.frame = NSRect(x: 0, y: historyBottom, width: 360, height: settingsHeight)
+        settings.isHidden = !settingsExpanded
+        let size = NSSize(width: 360, height: historyBottom + settingsSpace)
+        if preferredContentSize != size {
+            preferredContentSize = size
+            onSizeChange?(size)
+            view.setFrameSize(size)
         }
     }
     func showRecordingHint(_ text: String) {

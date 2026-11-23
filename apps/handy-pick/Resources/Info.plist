@@ -10,8 +10,8 @@
 <key>LSHasLocalizedDisplayName</key><true/>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleIconFile</key><string>QuickSnap</string>
-<key>CFBundleShortVersionString</key><string>0.5.0</string>
-<key>CFBundleVersion</key><string>58</string>
+<key>CFBundleShortVersionString</key><string>0.5.1</string>
+<key>CFBundleVersion</key><string>59</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>

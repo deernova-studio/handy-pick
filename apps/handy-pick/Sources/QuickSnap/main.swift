@@ -13,6 +13,8 @@ import OSLog
     private let clipboard = ClipboardMonitor()
     private let historyPreview = HistoryPreview()
     private var recentImage: NSImage?
+    private var routingTask: Task<Void, Never>?
+    private var editChoice: EditChoicePanel?
     private var captureTask: Task<Void, Never>?
     private var captureGeneration = 0
     private var permissionTimer: Timer?
@@ -21,8 +23,12 @@ import OSLog
     private let shortcutSettings = ShortcutSettings()
     private var shortcutDescriptions: [String] {
         let prefix = shortcutMode == .doublePress ? "双击" : "按下"
+        var described: [ShortcutBinding] = []
         return ShortcutAction.allCases.compactMap { action in
-            trigger.bindings[action].map { "\(prefix)\($0.displayName) \(action.title)" }
+            guard let binding = trigger.bindings[action], !described.contains(binding) else { return nil }
+            described.append(binding)
+            let titles = ShortcutAction.allCases.filter { trigger.bindings[$0] == binding }.map(\.title)
+            return "\(prefix)\(binding.displayName) \(titles.joined(separator: " / "))"
         }
     }
     private var message = ""
@@ -44,8 +50,11 @@ import OSLog
         status.button?.setAccessibilityLabel(AppIdentity.displayName)
         status.button?.target = self; status.button?.action = #selector(statusClicked)
         status.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        shortcutPanel.onDismiss = { [weak self] in
-            self?.trigger.cancelRecording(); self?.refresh()
+        panel.onSettingsCollapsed = { [weak self] in
+            guard let self, self.recordingAction != nil else { return }
+            self.recordingAction = nil
+            self.trigger.cancelRecording()
+            self.refresh()
         }
         shortcutPanel.isRecording = { [weak self] in self?.trigger.recording ?? false }
         trigger.onRecordingHint = { [weak self] in self?.panel.showRecordingHint($0) }
@@ -85,12 +94,16 @@ import OSLog
             self.startMonitoring()
         }
         panel.onPermission = { [weak self] in self?.requestPermission() }
-        trigger.onAction = { [weak self] action, pid in self?.handleShortcut(action, target: pid) }
+        trigger.onAction = { [weak self] actions, pid, point in self?.handleShortcut(actions, target: pid, at: point) }
+        trigger.onInteractionWhileSuspended = { [weak self] interruption in
+            guard let self, self.editChoice?.isVisible != true || interruption == .applicationChange else { return }
+            self.cancelRouting()
+        }
         trigger.onRecorded = { [weak self] value in
             guard let self, let action = self.recordingAction else { return }
             let saved = value.map { self.shortcutSettings.save($0, for: action, mode: self.shortcutMode) }
             self.startMonitoring()
-            if let saved { self.inform(saved ? "已保存" : "快捷键重复，请重新录入") }
+            if let saved { self.inform(saved ? "已保存" : "快捷键无效，请重新录入") }
         }
         startMonitoring()
         let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
@@ -108,15 +121,20 @@ import OSLog
         if NSApp.currentEvent?.type == .rightMouseUp {
             shortcutPanel.dismiss()
             status.menu = makeMenu(); status.button?.performClick(nil); status.menu = nil
-        } else { togglePopover() }
+        } else if shortcutPanel.isVisible {
+            shortcutPanel.dismiss()
+        } else {
+            showPopover()
+        }
     }
 
-    private func togglePopover() {
-        if shortcutPanel.isVisible { shortcutPanel.dismiss(); return }
+    private func showPopover(settingsExpanded: Bool = false) {
+        cancelRouting()
         historyPreview.dismiss()
         guard let button = status.button else { return }
         refresh()
-        shortcutPanel.show(below: button)
+        panel.setSettingsExpanded(settingsExpanded)
+        if !shortcutPanel.isVisible { shortcutPanel.show(below: button) }
     }
 
     private func refresh() {
@@ -135,7 +153,7 @@ import OSLog
     }
 
     private func updateSuspension() {
-        trigger.suspended = capture.active || captureTask != nil || historyPreview.window?.isKeyWindow == true
+        trigger.suspended = routingTask != nil || capture.active || captureTask != nil || historyPreview.window?.isKeyWindow == true
     }
 
     private func reconcilePermissions() {
@@ -152,6 +170,7 @@ import OSLog
     }
 
     private func startMonitoring() {
+        cancelRouting()
         cancelCapture()
         recordingAction = nil
         trigger.stop()
@@ -166,9 +185,9 @@ import OSLog
 
     private func beginRecording(_ action: ShortcutAction) {
         guard AXIsProcessTrusted() else { requestPermission(); return }
-        let otherBindings = trigger.bindings.compactMap { $0.key == action ? nil : $0.value }
+        cancelRouting()
         recordingAction = action
-        if trigger.beginRecording(excluding: otherBindings) {
+        if trigger.beginRecording() {
             inform("录入后立即保存")
         } else {
             recordingAction = nil
@@ -200,9 +219,10 @@ import OSLog
         let item = NSMenuItem(title: title, action: action, keyEquivalent: ""); item.target = self; menu.addItem(item); return item
     }
     @objc private func clearHistory() { clipboard.clear() }
-    @objc private func openRecorder() { DispatchQueue.main.async { self.togglePopover() } }
+    @objc private func openRecorder() { DispatchQueue.main.async { self.showPopover(settingsExpanded: true) } }
 
     @objc private func startFromMenu() {
+        cancelRouting()
         historyPreview.dismiss()
         shortcutPanel.dismiss()
         beginCapture(delay: .milliseconds(150))
@@ -243,11 +263,83 @@ import OSLog
         }
         updateSuspension()
     }
-    private func handleShortcut(_ action: ShortcutAction, target pid: pid_t) {
-        guard trigger.running, !capture.active, captureTask == nil, pid > 0,
+    private func handleShortcut(_ actions: Set<ShortcutAction>, target pid: pid_t, at point: CGPoint) {
+        guard trigger.running, routingTask == nil, !capture.active, captureTask == nil, pid > 0,
               pid != ProcessInfo.processInfo.processIdentifier,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
         shortcutPanel.dismiss()
+        if actions.count == 1, let action = actions.first {
+            performShortcut(action, target: pid)
+            return
+        }
+        routingTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if !Task.isCancelled {
+                    routingTask = nil
+                    updateSuspension()
+                }
+            }
+            let action = await InputTarget.resolve(at: point, foregroundPID: pid, actions: actions)
+            guard !Task.isCancelled, NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
+            switch action {
+            case .copy(let text):
+                NSPasteboard.general.clearContents()
+                if NSPasteboard.general.setString(text, forType: .string) {
+                    clipboard.poll()
+                    recordGestureOutcome("selected-text-copied")
+                    inform("已复制选中文字")
+                    copyFeedback.show()
+                } else { inform("复制失败，请重试") }
+            case .copyFocused(let input):
+                if await input.isFocused(), !Task.isCancelled {
+                    performShortcut(.copy, target: pid)
+                } else if !Task.isCancelled {
+                    inform("请先聚焦选区所在的控件再复制")
+                }
+            case .chooseCopyOrPaste(let input):
+                await chooseTerminalAction(in: input)
+            case .paste(let input):
+                guard !(NSPasteboard.general.types?.isEmpty ?? true) else { inform("剪贴板为空"); return }
+                if await input.focusForPaste(), !Task.isCancelled {
+                    performShortcut(.paste, target: pid)
+                } else if !Task.isCancelled {
+                    inform("请先点入输入框再使用快捷键")
+                }
+            case .capture:
+                performShortcut(.capture, target: pid)
+            case .unknownSelection:
+                recordGestureOutcome("shared-shortcut-selection-unknown")
+                inform("无法确认选区，请使用独立复制或粘贴键")
+            case .unavailable:
+                recordGestureOutcome("shared-shortcut-unresolved")
+                inform("未找到匹配的动作")
+            }
+        }
+        updateSuspension()
+    }
+
+    private func cancelRouting() {
+        guard let routingTask else { return }
+        routingTask.cancel()
+        editChoice?.dismiss()
+        editChoice = nil
+        self.routingTask = nil
+        updateSuspension()
+    }
+
+    private func chooseTerminalAction(in input: InputTarget) async {
+        guard await input.isFocused(), !Task.isCancelled else { return }
+        let panel = EditChoicePanel()
+        editChoice = panel
+        let choice = await panel.choose(at: NSEvent.mouseLocation)
+        if editChoice === panel { editChoice = nil }
+        guard let choice, !Task.isCancelled,
+              await input.isFocused(), !Task.isCancelled else { return }
+        performShortcut(choice, target: input.pid)
+    }
+
+    private func performShortcut(_ action: ShortcutAction, target pid: pid_t) {
         switch action {
         case .copy:
             if postShortcut(key: 8, to: pid) { // C
@@ -308,8 +400,16 @@ import OSLog
     private func openSettings(_ section: String) {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(section)") { NSWorkspace.shared.open(url) }
     }
-    @objc private func quit() { cancelCapture(); trigger.stop(); NSApp.terminate(nil) }
-    func applicationWillTerminate(_ notification: Notification) { permissionTimer?.invalidate(); cancelCapture(); trigger.stop(); historyPreview.dismiss(); clipboard.stop(); clipboard.clear() }
+    @objc private func quit() { NSApp.terminate(nil) }
+    func applicationWillTerminate(_ notification: Notification) {
+        permissionTimer?.invalidate()
+        cancelRouting()
+        cancelCapture()
+        trigger.stop()
+        historyPreview.dismiss()
+        clipboard.stop()
+        clipboard.clear()
+    }
 }
 
 MainActor.assumeIsolated {
